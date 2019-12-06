@@ -234,72 +234,69 @@ def unet2D_l2l(inputs, nlabels, training_pl):
     return outputs
 
 # ======================================================================
-# 2D Unet for label autoencoder
+# 3D Unet for label autoencoder
 # ======================================================================
-def unet2D_l2l_vae(inputs,
-                   nlabels,
-                   training_pl): 
-    
-    z_mu, z_log_sigma_sq = l2l_vae_enc(inputs,
-                                       training_pl)
-    
-    eps = tf.random_normal(shape=tf.shape(z_log_sigma_sq),
-                           mean=0,
-                           stddev=1,
-                           dtype=tf.float32)
-    
-    z = z_mu + tf.sqrt(tf.exp(z_log_sigma_sq)) * eps
-    
-    x_rec = l2l_vae_dec(z,
-                        nlabels,
-                        training_pl)
-    
-    return x_rec, z_mu, z_log_sigma_sq
-    
-def l2l_vae_enc(inputs,
-                training_pl):
-    
+def unet3D_n4_l2l_no_skip_connections(inputs,
+                                      nlabels,
+                                      training_pl): 
+
     n0 = 16
-    n1, n2, n3, n4, n5 = 1*n0, 2*n0, 4*n0, 8*n0, 16*n0
+    n1, n2, n3, n4 = 1*n0, 2*n0, 4*n0, 8*n0
     
-    with tf.variable_scope('l2l_mapper_enc'):
+    with tf.variable_scope('l2l_mapper'):
         
         # ====================================
         # 1st Conv block - two conv layers, followed by max-pooling
         # ====================================
-        conv1_1 = layers.conv2D_layer_bn(x=inputs, name='conv1_1', num_filters=n1, training=training_pl)
-        conv1_2 = layers.conv2D_layer_bn(x=conv1_1, name='conv1_2', num_filters=n1, training=training_pl)
-        pool1 = layers.max_pool_layer2d(conv1_2)
+        conv1_1 = layers.conv3D_layer_bn(x=inputs, name='conv1_1', num_filters=n1, training=training_pl)
+        conv1_2 = layers.conv3D_layer_bn(x=conv1_1, name='conv1_2', num_filters=n1, training=training_pl)
+        pool1 = layers.max_pool_layer3d(conv1_2)
     
         # ====================================
         # 2nd Conv block
         # ====================================
-        conv2_1 = layers.conv2D_layer_bn(x=pool1, name='conv2_1', num_filters=n2, training=training_pl)
-        conv2_2 = layers.conv2D_layer_bn(x=conv2_1, name='conv2_2', num_filters=n2, training=training_pl)
-        pool2 = layers.max_pool_layer2d(conv2_2)
+        conv2_1 = layers.conv3D_layer_bn(x=pool1, name='conv2_1', num_filters=n2, training=training_pl)
+        conv2_2 = layers.conv3D_layer_bn(x=conv2_1, name='conv2_2', num_filters=n2, training=training_pl)
+        pool2 = layers.max_pool_layer3d(conv2_2)
     
         # ====================================
         # 3rd Conv block
         # ====================================
-        conv3_1 = layers.conv2D_layer_bn(x=pool2, name='conv3_1', num_filters=n3, training=training_pl)
-        conv3_2 = layers.conv2D_layer_bn(x=conv3_1, name='conv3_2', num_filters=n3, training=training_pl)
-        pool3 = layers.max_pool_layer2d(conv3_2)
-    
+        conv3_1 = layers.conv3D_layer_bn(x=pool2, name='conv3_1', num_filters=n3, training=training_pl)
+        conv3_2 = layers.conv3D_layer_bn(x=conv3_1, name='conv3_2', num_filters=n3, training=training_pl)
+        pool3 = layers.max_pool_layer3d(conv3_2)
+        
         # ====================================
         # 4th Conv block
         # ====================================
-        conv4_1 = layers.conv2D_layer_bn(x=pool3, name='conv4_1', num_filters=n4, training=training_pl)
-        conv4_2 = layers.conv2D_layer_bn(x=conv4_1, name='conv4_2', num_filters=n4, training=training_pl)
-        pool4 = layers.max_pool_layer2d(conv4_2)
+        conv4_1 = layers.conv3D_layer_bn(x=pool3, name='conv4_1', num_filters=n4, training=training_pl)
+        conv4_2 = layers.conv3D_layer_bn(x=conv4_1, name='conv4_2', num_filters=n4, training=training_pl)
         
         # ====================================
-        # 5th Conv block
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
         # ====================================
-        conv5_1 = layers.conv2D_layer_bn(x=pool4, name='conv5_1', num_filters=n5, training=training_pl)
-        conv5_2 = layers.conv2D_layer_bn(x=conv5_1, name='conv5_2', num_filters=n5, training=training_pl)
+        upsample1 = layers.bilinear_upsample3D(conv4_2, factor = 2, name='upsample1')
+        conv5_1 = layers.conv3D_layer_bn(x=upsample1, name='conv5_1', num_filters=n3, training=training_pl)
+        conv5_2 = layers.conv3D_layer_bn(x=conv5_1, name='conv5_2', num_filters=n3, training=training_pl)
         
-        z_mu = layers.conv2D_layer(x=conv5_2, name='z_mu', num_filters=n5, kernel_size=1)
-        z_log_sigma_sq = layers.conv2D_layer(x=conv5_2, name='z_sigma_sq', num_filters=n5, kernel_size=1)
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample2 = layers.bilinear_upsample3D(conv5_2, factor = 2, name='upsample2')    
+        conv6_1 = layers.conv3D_layer_bn(x=upsample2, name='conv6_1', num_filters=n2, training=training_pl)
+        conv6_2 = layers.conv3D_layer_bn(x=conv6_1, name='conv6_2', num_filters=n2, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample3 = layers.bilinear_upsample3D(conv6_2, factor = 2, name='upsample3')   
+        conv7_1 = layers.conv3D_layer_bn(x=upsample3, name='conv7_1', num_filters=n1, training=training_pl)
+        conv7_2 = layers.conv3D_layer_bn(x=conv7_1, name='conv7_2', num_filters=n1, training=training_pl)
+            
+        # ====================================
+        # Final conv layer - without batch normalization or activation
+        # ====================================
+        outputs = layers.conv3D_layer(x=conv7_2, name='output_layer', num_filters=nlabels, kernel_size=1)
         
         # ====================================
         # print shapes at various layers in the network
@@ -308,60 +305,387 @@ def l2l_vae_enc(inputs,
         print('Shape after 1st max pooling layer: ' + str(pool1.shape))
         print('Shape after 2nd max pooling layer: ' + str(pool2.shape))        
         print('Shape after 3rd max pooling layer: ' + str(pool3.shape))        
-        print('Shape after 4th max pooling layer / bottleneck layer: ' + str(pool4.shape))   
-        print('Shape after z mu: ' + str(z_mu.shape))   
-        print('Shape after z_log_sigma_sq: ' + str(z_log_sigma_sq.shape))            
-        
-        return z_mu, z_log_sigma_sq
-        
-def l2l_vae_dec(z,
-                nlabels,
-                training_pl):
-    
+        print('Shape of the bottleneck layer: ' + str(conv4_2.shape))            
+        print('Shape after 1st upsampling block: ' + str(upsample1.shape))            
+        print('Shape after 2nd upsampling block: ' + str(upsample2.shape))     
+        print('Shape after 3rd upsampling block: ' + str(upsample3.shape))     
+        print('Shape of output (before softmax): ' + str(outputs.shape))
+
+    return outputs
+
+# ======================================================================
+# 3D Unet for label autoencoder
+# ======================================================================
+def unet3D_n5_l2l_no_skip_connections(inputs,
+                                      nlabels,
+                                      training_pl): 
+
     n0 = 16
     n1, n2, n3, n4, n5 = 1*n0, 2*n0, 4*n0, 8*n0, 16*n0
     
-    with tf.variable_scope('l2l_mapper_enc'):
+    with tf.variable_scope('l2l_mapper'):
+        
         # ====================================
-        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # 1st Conv block - two conv layers, followed by max-pooling
         # ====================================
-        upsample1 = layers.bilinear_upsample2D(z, size = (tf.shape(z)[1]*2, tf.shape(z)[2]*2), name='upsample1')
-        conv6_1 = layers.conv2D_layer_bn(x=upsample1, name='conv6_1', num_filters=n4, training=training_pl)
-        conv6_2 = layers.conv2D_layer_bn(x=conv6_1, name='conv6_2', num_filters=n4, training=training_pl)
+        conv1_1 = layers.conv3D_layer_bn(x=inputs, name='conv1_1', num_filters=n1, training=training_pl)
+        conv1_2 = layers.conv3D_layer_bn(x=conv1_1, name='conv1_2', num_filters=n1, training=training_pl)
+        pool1 = layers.max_pool_layer3d(conv1_2)
+    
+        # ====================================
+        # 2nd Conv block
+        # ====================================
+        conv2_1 = layers.conv3D_layer_bn(x=pool1, name='conv2_1', num_filters=n2, training=training_pl)
+        conv2_2 = layers.conv3D_layer_bn(x=conv2_1, name='conv2_2', num_filters=n2, training=training_pl)
+        pool2 = layers.max_pool_layer3d(conv2_2)
+    
+        # ====================================
+        # 3rd Conv block
+        # ====================================
+        conv3_1 = layers.conv3D_layer_bn(x=pool2, name='conv3_1', num_filters=n3, training=training_pl)
+        conv3_2 = layers.conv3D_layer_bn(x=conv3_1, name='conv3_2', num_filters=n3, training=training_pl)
+        pool3 = layers.max_pool_layer3d(conv3_2)
+        
+        # ====================================
+        # 4th Conv block
+        # ====================================
+        conv4_1 = layers.conv3D_layer_bn(x=pool3, name='conv4_1', num_filters=n4, training=training_pl)
+        conv4_2 = layers.conv3D_layer_bn(x=conv4_1, name='conv4_2', num_filters=n4, training=training_pl)
+        pool4 = layers.max_pool_layer3d(conv4_2)
+        
+        # ====================================
+        # 5th Conv block
+        # ====================================
+        conv5_1 = layers.conv3D_layer_bn(x=pool4, name='conv5_1', num_filters=n5, training=training_pl)
+        conv5_2 = layers.conv3D_layer_bn(x=conv5_1, name='conv5_2', num_filters=n5, training=training_pl)
         
         # ====================================
         # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
         # ====================================
-        upsample2 = layers.bilinear_upsample2D(conv6_2, size = (tf.shape(conv6_2)[1]*2, tf.shape(conv6_2)[2]*2), name='upsample2')    
-        conv7_1 = layers.conv2D_layer_bn(x=upsample2, name='conv7_1', num_filters=n3, training=training_pl)
-        conv7_2 = layers.conv2D_layer_bn(x=conv7_1, name='conv7_2', num_filters=n3, training=training_pl)
+        upsample1 = layers.bilinear_upsample3D(conv5_2, factor = 2, name='upsample1')
+        conv6_1 = layers.conv3D_layer_bn(x=upsample1, name='conv6_1', num_filters=n3, training=training_pl)
+        conv6_2 = layers.conv3D_layer_bn(x=conv6_1, name='conv6_2', num_filters=n3, training=training_pl)
         
         # ====================================
         # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
         # ====================================
-        upsample3 = layers.bilinear_upsample2D(conv7_2, size = (tf.shape(conv7_2)[1]*2, tf.shape(conv7_2)[2]*2), name='upsample3')    
-        conv8_1 = layers.conv2D_layer_bn(x=upsample3, name='conv8_1', num_filters=n2, training=training_pl)
-        conv8_2 = layers.conv2D_layer_bn(x=conv8_1, name='conv8_2', num_filters=n2, training=training_pl)
+        upsample2 = layers.bilinear_upsample3D(conv6_2, factor = 2, name='upsample2')
+        conv7_1 = layers.conv3D_layer_bn(x=upsample2, name='conv7_1', num_filters=n3, training=training_pl)
+        conv7_2 = layers.conv3D_layer_bn(x=conv7_1, name='conv7_2', num_filters=n3, training=training_pl)
         
         # ====================================
         # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
         # ====================================
-        upsample4 = layers.bilinear_upsample2D(conv8_2, size = (tf.shape(conv8_2)[1]*2, tf.shape(conv8_2)[2]*2), name='upsample4')  
-        conv9_1 = layers.conv2D_layer_bn(x=upsample4, name='conv9_1', num_filters=n1, training=training_pl)
-        conv9_2 = layers.conv2D_layer_bn(x=conv9_1, name='conv9_2', num_filters=n1, training=training_pl)
+        upsample3 = layers.bilinear_upsample3D(conv7_2, factor = 2, name='upsample3')    
+        conv8_1 = layers.conv3D_layer_bn(x=upsample3, name='conv8_1', num_filters=n2, training=training_pl)
+        conv8_2 = layers.conv3D_layer_bn(x=conv8_1, name='conv8_2', num_filters=n2, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample4 = layers.bilinear_upsample3D(conv8_2, factor = 2, name='upsample4')   
+        conv9_1 = layers.conv3D_layer_bn(x=upsample4, name='conv9_1', num_filters=n1, training=training_pl)
+        conv9_2 = layers.conv3D_layer_bn(x=conv9_1, name='conv9_2', num_filters=n1, training=training_pl)
             
         # ====================================
         # Final conv layer - without batch normalization or activation
         # ====================================
-        outputs = layers.conv2D_layer(x=conv9_2, name='output_layer', num_filters=nlabels, kernel_size=1)
+        outputs = layers.conv3D_layer(x=conv9_2, name='output_layer', num_filters=nlabels, kernel_size=1)
         
         # ====================================
         # print shapes at various layers in the network
         # ====================================
+        print('Shape of input: ' + str(inputs.shape))        
+        print('Shape after 1st max pooling layer: ' + str(pool1.shape))
+        print('Shape after 2nd max pooling layer: ' + str(pool2.shape))        
+        print('Shape after 3rd max pooling layer: ' + str(pool3.shape))        
+        print('Shape after 4th max pooling layer: ' + str(pool4.shape))        
+        print('Shape of the bottleneck layer: ' + str(conv5_2.shape))            
         print('Shape after 1st upsampling block: ' + str(upsample1.shape))            
         print('Shape after 2nd upsampling block: ' + str(upsample2.shape))     
         print('Shape after 3rd upsampling block: ' + str(upsample3.shape))     
-        print('Shape after 4rd upsampling block: ' + str(upsample4.shape)) 
+        print('Shape after 4th upsampling block: ' + str(upsample4.shape))     
+        print('Shape of output (before softmax): ' + str(outputs.shape))
+
+    return outputs
+
+# ======================================================================
+# 3D Unet for label autoencoder
+# ======================================================================
+def unet3D_n5_l2l_with_skip_connections(inputs,
+                                        nlabels,
+                                        training_pl): 
+
+    n0 = 16
+    n1, n2, n3, n4, n5 = 1*n0, 2*n0, 4*n0, 8*n0, 16*n0
+    
+    with tf.variable_scope('l2l_mapper'):
+        
+        # ====================================
+        # 1st Conv block - two conv layers, followed by max-pooling
+        # ====================================
+        conv1_1 = layers.conv3D_layer_bn(x=inputs, name='conv1_1', num_filters=n1, training=training_pl)
+        conv1_2 = layers.conv3D_layer_bn(x=conv1_1, name='conv1_2', num_filters=n1, training=training_pl)
+        pool1 = layers.max_pool_layer3d(conv1_2)
+    
+        # ====================================
+        # 2nd Conv block
+        # ====================================
+        conv2_1 = layers.conv3D_layer_bn(x=pool1, name='conv2_1', num_filters=n2, training=training_pl)
+        conv2_2 = layers.conv3D_layer_bn(x=conv2_1, name='conv2_2', num_filters=n2, training=training_pl)
+        pool2 = layers.max_pool_layer3d(conv2_2)
+    
+        # ====================================
+        # 3rd Conv block
+        # ====================================
+        conv3_1 = layers.conv3D_layer_bn(x=pool2, name='conv3_1', num_filters=n3, training=training_pl)
+        conv3_2 = layers.conv3D_layer_bn(x=conv3_1, name='conv3_2', num_filters=n3, training=training_pl)
+        pool3 = layers.max_pool_layer3d(conv3_2)
+        
+        # ====================================
+        # 4th Conv block
+        # ====================================
+        conv4_1 = layers.conv3D_layer_bn(x=pool3, name='conv4_1', num_filters=n4, training=training_pl)
+        conv4_2 = layers.conv3D_layer_bn(x=conv4_1, name='conv4_2', num_filters=n4, training=training_pl)
+        pool4 = layers.max_pool_layer3d(conv4_2)
+        
+        # ====================================
+        # 5th Conv block
+        # ====================================
+        conv5_1 = layers.conv3D_layer_bn(x=pool4, name='conv5_1', num_filters=n5, training=training_pl)
+        conv5_2 = layers.conv3D_layer_bn(x=conv5_1, name='conv5_2', num_filters=n5, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample1 = layers.bilinear_upsample3D(conv5_2, factor = 2, name='upsample1')
+        concat1 = tf.concat([upsample1, conv4_2], axis=-1)
+        conv6_1 = layers.conv3D_layer_bn(x=concat1, name='conv6_1', num_filters=n3, training=training_pl)
+        conv6_2 = layers.conv3D_layer_bn(x=conv6_1, name='conv6_2', num_filters=n3, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample2 = layers.bilinear_upsample3D(conv6_2, factor = 2, name='upsample2')
+        concat2 = tf.concat([upsample2, conv3_2], axis=-1)
+        conv7_1 = layers.conv3D_layer_bn(x=concat2, name='conv7_1', num_filters=n3, training=training_pl)
+        conv7_2 = layers.conv3D_layer_bn(x=conv7_1, name='conv7_2', num_filters=n3, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample3 = layers.bilinear_upsample3D(conv7_2, factor = 2, name='upsample3')  
+        concat3 = tf.concat([upsample3, conv2_2], axis=-1)
+        conv8_1 = layers.conv3D_layer_bn(x=concat3, name='conv8_1', num_filters=n2, training=training_pl)
+        conv8_2 = layers.conv3D_layer_bn(x=conv8_1, name='conv8_2', num_filters=n2, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample4 = layers.bilinear_upsample3D(conv8_2, factor = 2, name='upsample4')   
+        concat4 = tf.concat([upsample4, conv1_2], axis=-1)
+        conv9_1 = layers.conv3D_layer_bn(x=concat4, name='conv9_1', num_filters=n1, training=training_pl)
+        conv9_2 = layers.conv3D_layer_bn(x=conv9_1, name='conv9_2', num_filters=n1, training=training_pl)
+            
+        # ====================================
+        # Final conv layer - without batch normalization or activation
+        # ====================================
+        outputs = layers.conv3D_layer(x=conv9_2, name='output_layer', num_filters=nlabels, kernel_size=1)
+        
+        # ====================================
+        # print shapes at various layers in the network
+        # ====================================
+        print('Shape of input: ' + str(inputs.shape))        
+        print('Shape after 1st max pooling layer: ' + str(pool1.shape))
+        print('Shape after 2nd max pooling layer: ' + str(pool2.shape))        
+        print('Shape after 3rd max pooling layer: ' + str(pool3.shape))        
+        print('Shape after 4th max pooling layer: ' + str(pool4.shape))        
+        print('Shape of the bottleneck layer: ' + str(conv5_2.shape))            
+        print('Shape after 1st upsampling block: ' + str(upsample1.shape))            
+        print('Shape after 2nd upsampling block: ' + str(upsample2.shape))     
+        print('Shape after 3rd upsampling block: ' + str(upsample3.shape))     
+        print('Shape after 4th upsampling block: ' + str(upsample4.shape))     
+        print('Shape of output (before softmax): ' + str(outputs.shape))
+
+    return outputs
+
+# ======================================================================
+# 3D Unet for label autoencoder
+# ======================================================================
+def unet3D_n5_l2l_with_skip_connections_except_first_layer(inputs,
+                                                           nlabels,
+                                                           training_pl): 
+
+    n0 = 16
+    n1, n2, n3, n4, n5 = 1*n0, 2*n0, 4*n0, 8*n0, 16*n0
+    
+    with tf.variable_scope('l2l_mapper'):
+        
+        # ====================================
+        # 1st Conv block - two conv layers, followed by max-pooling
+        # ====================================
+        conv1_1 = layers.conv3D_layer_bn(x=inputs, name='conv1_1', num_filters=n1, training=training_pl)
+        conv1_2 = layers.conv3D_layer_bn(x=conv1_1, name='conv1_2', num_filters=n1, training=training_pl)
+        pool1 = layers.max_pool_layer3d(conv1_2)
+    
+        # ====================================
+        # 2nd Conv block
+        # ====================================
+        conv2_1 = layers.conv3D_layer_bn(x=pool1, name='conv2_1', num_filters=n2, training=training_pl)
+        conv2_2 = layers.conv3D_layer_bn(x=conv2_1, name='conv2_2', num_filters=n2, training=training_pl)
+        pool2 = layers.max_pool_layer3d(conv2_2)
+    
+        # ====================================
+        # 3rd Conv block
+        # ====================================
+        conv3_1 = layers.conv3D_layer_bn(x=pool2, name='conv3_1', num_filters=n3, training=training_pl)
+        conv3_2 = layers.conv3D_layer_bn(x=conv3_1, name='conv3_2', num_filters=n3, training=training_pl)
+        pool3 = layers.max_pool_layer3d(conv3_2)
+        
+        # ====================================
+        # 4th Conv block
+        # ====================================
+        conv4_1 = layers.conv3D_layer_bn(x=pool3, name='conv4_1', num_filters=n4, training=training_pl)
+        conv4_2 = layers.conv3D_layer_bn(x=conv4_1, name='conv4_2', num_filters=n4, training=training_pl)
+        pool4 = layers.max_pool_layer3d(conv4_2)
+        
+        # ====================================
+        # 5th Conv block
+        # ====================================
+        conv5_1 = layers.conv3D_layer_bn(x=pool4, name='conv5_1', num_filters=n5, training=training_pl)
+        conv5_2 = layers.conv3D_layer_bn(x=conv5_1, name='conv5_2', num_filters=n5, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample1 = layers.bilinear_upsample3D(conv5_2, factor = 2, name='upsample1')
+        concat1 = tf.concat([upsample1, conv4_2], axis=-1)
+        conv6_1 = layers.conv3D_layer_bn(x=concat1, name='conv6_1', num_filters=n3, training=training_pl)
+        conv6_2 = layers.conv3D_layer_bn(x=conv6_1, name='conv6_2', num_filters=n3, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample2 = layers.bilinear_upsample3D(conv6_2, factor = 2, name='upsample2')
+        concat2 = tf.concat([upsample2, conv3_2], axis=-1)
+        conv7_1 = layers.conv3D_layer_bn(x=concat2, name='conv7_1', num_filters=n3, training=training_pl)
+        conv7_2 = layers.conv3D_layer_bn(x=conv7_1, name='conv7_2', num_filters=n3, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample3 = layers.bilinear_upsample3D(conv7_2, factor = 2, name='upsample3')  
+        concat3 = tf.concat([upsample3, conv2_2], axis=-1)
+        conv8_1 = layers.conv3D_layer_bn(x=concat3, name='conv8_1', num_filters=n2, training=training_pl)
+        conv8_2 = layers.conv3D_layer_bn(x=conv8_1, name='conv8_2', num_filters=n2, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample4 = layers.bilinear_upsample3D(conv8_2, factor = 2, name='upsample4')   
+        conv9_1 = layers.conv3D_layer_bn(x=upsample4, name='conv9_1', num_filters=n1, training=training_pl)
+        conv9_2 = layers.conv3D_layer_bn(x=conv9_1, name='conv9_2', num_filters=n1, training=training_pl)
+            
+        # ====================================
+        # Final conv layer - without batch normalization or activation
+        # ====================================
+        outputs = layers.conv3D_layer(x=conv9_2, name='output_layer', num_filters=nlabels, kernel_size=1)
+        
+        # ====================================
+        # print shapes at various layers in the network
+        # ====================================
+        print('Shape of input: ' + str(inputs.shape))        
+        print('Shape after 1st max pooling layer: ' + str(pool1.shape))
+        print('Shape after 2nd max pooling layer: ' + str(pool2.shape))        
+        print('Shape after 3rd max pooling layer: ' + str(pool3.shape))        
+        print('Shape after 4th max pooling layer: ' + str(pool4.shape))        
+        print('Shape of the bottleneck layer: ' + str(conv5_2.shape))            
+        print('Shape after 1st upsampling block: ' + str(upsample1.shape))            
+        print('Shape after 2nd upsampling block: ' + str(upsample2.shape))     
+        print('Shape after 3rd upsampling block: ' + str(upsample3.shape))     
+        print('Shape after 4th upsampling block: ' + str(upsample4.shape))     
+        print('Shape of output (before softmax): ' + str(outputs.shape))
+
+    return outputs
+
+# ======================================================================
+# 3D Unet for label autoencoder
+# ======================================================================
+def unet3D_n4_l2l_with_skip_connections_except_first_layer(inputs,
+                                                           nlabels,
+                                                           training_pl): 
+
+    n0 = 16
+    n1, n2, n3, n4 = 1*n0, 2*n0, 4*n0, 8*n0
+    
+    with tf.variable_scope('l2l_mapper'):
+        
+        # ====================================
+        # 1st Conv block - two conv layers, followed by max-pooling
+        # ====================================
+        conv1_1 = layers.conv3D_layer_bn(x=inputs, name='conv1_1', num_filters=n1, training=training_pl)
+        conv1_2 = layers.conv3D_layer_bn(x=conv1_1, name='conv1_2', num_filters=n1, training=training_pl)
+        pool1 = layers.max_pool_layer3d(conv1_2)
+    
+        # ====================================
+        # 2nd Conv block
+        # ====================================
+        conv2_1 = layers.conv3D_layer_bn(x=pool1, name='conv2_1', num_filters=n2, training=training_pl)
+        conv2_2 = layers.conv3D_layer_bn(x=conv2_1, name='conv2_2', num_filters=n2, training=training_pl)
+        pool2 = layers.max_pool_layer3d(conv2_2)
+    
+        # ====================================
+        # 3rd Conv block
+        # ====================================
+        conv3_1 = layers.conv3D_layer_bn(x=pool2, name='conv3_1', num_filters=n3, training=training_pl)
+        conv3_2 = layers.conv3D_layer_bn(x=conv3_1, name='conv3_2', num_filters=n3, training=training_pl)
+        pool3 = layers.max_pool_layer3d(conv3_2)
+                
+        # ====================================
+        # 4th Conv block
+        # ====================================
+        conv5_1 = layers.conv3D_layer_bn(x=pool3, name='conv5_1', num_filters=n4, training=training_pl)
+        conv5_2 = layers.conv3D_layer_bn(x=conv5_1, name='conv5_2', num_filters=n4, training=training_pl)
+                
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample2 = layers.bilinear_upsample3D(conv5_2, factor = 2, name='upsample2')
+        concat2 = tf.concat([upsample2, conv3_2], axis=-1)
+        conv7_1 = layers.conv3D_layer_bn(x=concat2, name='conv7_1', num_filters=n3, training=training_pl)
+        conv7_2 = layers.conv3D_layer_bn(x=conv7_1, name='conv7_2', num_filters=n3, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample3 = layers.bilinear_upsample3D(conv7_2, factor = 2, name='upsample3')  
+        concat3 = tf.concat([upsample3, conv2_2], axis=-1)
+        conv8_1 = layers.conv3D_layer_bn(x=concat3, name='conv8_1', num_filters=n2, training=training_pl)
+        conv8_2 = layers.conv3D_layer_bn(x=conv8_1, name='conv8_2', num_filters=n2, training=training_pl)
+        
+        # ====================================
+        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # ====================================
+        upsample4 = layers.bilinear_upsample3D(conv8_2, factor = 2, name='upsample4')   
+        conv9_1 = layers.conv3D_layer_bn(x=upsample4, name='conv9_1', num_filters=n1, training=training_pl)
+        conv9_2 = layers.conv3D_layer_bn(x=conv9_1, name='conv9_2', num_filters=n1, training=training_pl)
+            
+        # ====================================
+        # Final conv layer - without batch normalization or activation
+        # ====================================
+        outputs = layers.conv3D_layer(x=conv9_2, name='output_layer', num_filters=nlabels, kernel_size=1)
+        
+        # ====================================
+        # print shapes at various layers in the network
+        # ====================================
+        print('Shape of input: ' + str(inputs.shape))        
+        print('Shape after 1st max pooling layer: ' + str(pool1.shape))
+        print('Shape after 2nd max pooling layer: ' + str(pool2.shape))        
+        print('Shape after 3rd max pooling layer: ' + str(pool3.shape))               
+        print('Shape of the bottleneck layer: ' + str(conv5_2.shape))            
+        print('Shape after 2nd upsampling block: ' + str(upsample2.shape))     
+        print('Shape after 3rd upsampling block: ' + str(upsample3.shape))     
+        print('Shape after 4th upsampling block: ' + str(upsample4.shape))     
         print('Shape of output (before softmax): ' + str(outputs.shape))
 
     return outputs
@@ -369,7 +693,9 @@ def l2l_vae_dec(z,
 # ======================================================================
 # normalization network
 # ======================================================================
-def image_normalizer(images, exp_config, training):
+def net2D_i2i(images,
+              exp_config,
+              training):
         
     with tf.variable_scope('image_normalizer'):       
                 
@@ -387,6 +713,9 @@ def image_normalizer(images, exp_config, training):
                                    name='norm_conv1_'+str(l+1),
                                    use_bias=True,
                                    activation=None)
+            
+            if exp_config.norm_batch_norm is True:
+                out = tf.layers.batch_normalization(inputs=out, name = 'norm_conv1_' + str(l+1) + '_bn', training = training)
             
             if exp_config.norm_activation is 'elu':
                 out = tf.nn.elu(out)
