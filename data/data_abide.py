@@ -1,283 +1,488 @@
 import os
-import glob
 import numpy as np
 import logging
-# import image and other utility functions
+import gc
+import h5py
+import glob
 import utils
+from skimage.transform import rescale
 import config.system as sys_config
 from shutil import copyfile
-from skimage.transform import rescale
+import subprocess
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
+
+# Maximum number of data points that can be in memory at any time
+MAX_WRITE_BUFFER = 5
 
 # =============================================================================================
 # FUNCTION FOR COPYING RELEVANT FILES FROM DIFFERENT SITES TO THE LOCAL DISK
 # =============================================================================================
-def copy_site_files():
+def copy_site_files_abide_caltech():
      
-    # set site name
-    #sitepath = 'caltech/dicom/triotim/mmilham/abide_28730/'
-    sitepath = 'stanford/dicom/signa/mmilham/abide_28730/'
-    prepoc_folder = '/usr/bmicnas01/data-biwi-01/nkarani/projects/hcp_segmentation/data/preproc_data/abide/stanford/'
-    sitefolder = os.path.join(sys_config.orig_data_root_abide, sitepath)
-    sitesubjects = sorted(glob.glob(sitefolder + '*'))
+    src_folder = '/usr/bmicnas01/data-biwi-01/nkarani/projects/hcp_segmentation/data/preproc_data/abide/caltech/'
+    dst_folder = '/usr/bmicnas01/data-biwi-01/nkarani/projects/generative_segmentation/data/preproc_data/abide/CALTECH/'
+    src_folders_list = sorted(glob.glob(src_folder + '*/'))
     
     # set the destination for this site
-    for sub_id in range(len(sitesubjects)):
+    for patient_num in range(len(src_folders_list)):
         
-        patname = sitesubjects[sub_id][sitesubjects[sub_id].rfind('/')+1:]
-        patdir = prepoc_folder + patname + '/'
-        if not os.path.exists(patdir):
-            os.makedirs(patdir)
+        patient_name = src_folders_list[patient_num][:-1][src_folders_list[patient_num][:-1].rfind('/')+1:]
+        src_folder_this_patient = src_folder + patient_name
+        dst_folder_this_patient = dst_folder + patient_name
+                
+        if patient_name in ['A00033264', 'A00033493']:
+            continue
         
-        sesspath = glob.glob(sitesubjects[sub_id] + '/*')        
-        sessname = sesspath[0][sesspath[0].rfind('/')+1:]
-        
-        # copy main image
-        copyfile(sesspath[0] + '/mprage_0001/MPRAGE.nii.gz', patdir + 'MPRAGE.nii.gz')
+        if not os.path.exists(dst_folder_this_patient):
+            os.makedirs(dst_folder_this_patient)
             
-        # read the contents inside the top-level subject directory
-        filenames = sorted(glob.glob(sesspath[0] + '/mprage_0001/' + sessname + '/mri/*'))
-        
-        # search for and copy the relevant files
-        for name in filenames:        
-            # search for the image file
-            if name == sesspath[0] + '/mprage_0001/' + sessname + '/mri/aparc+aseg.mgz':
-                logging.info('%d done!' %sub_id)
-                copyfile(name, patdir + 'aparc+aseg.mgz')
-            elif name == sesspath[0] + '/mprage_0001/' + sessname + '/mri/brain.mgz':
-                copyfile(name, patdir + 'brain.mgz')
-            elif name == sesspath[0] + '/mprage_0001/' + sessname + '/mri/norm.mgz':
-                copyfile(name, patdir + 'norm.mgz')
-            elif name == sesspath[0] + '/mprage_0001/' + sessname + '/mri/nu.mgz':
-                copyfile(name, patdir + 'nu.mgz')
-            elif name == sesspath[0] + '/mprage_0001/' + sessname + '/mri/orig.mgz':
-                copyfile(name, patdir + 'orig.mgz')
-            elif name == sesspath[0] + '/mprage_0001/' + sessname + '/mri/orig_nu.mgz':
-                copyfile(name, patdir + 'orig_nu.mgz')
-            elif name == sesspath[0] + '/mprage_0001/' + sessname + '/mri/ribbon.mgz':
-                copyfile(name, patdir + 'ribbon.mgz')
-            elif name == sesspath[0] + '/mprage_0001/' + sessname + '/mri/T1.mgz':
-                copyfile(name, patdir + 'T1.mgz')
+        # copy image and labels
+        for suffix in ['/MPRAGE.nii', '/MPRAGE_n4.nii', '/orig_labels_aligned_with_true_image.nii.gz']:
+            copyfile(src_folder_this_patient + suffix , dst_folder_this_patient + suffix ) 
             
-# ===============================================================     
-# This function unzips and pre-processes the data if this has not already been done.
-# If this already been done, it reads the processed data and returns it.                    
-# ===============================================================                         
-def load_data(input_folder,
-              preproc_folder,
-              idx_start,
-              idx_end,
-              bias_correction = False,
-              force_overwrite = False):
+# =============================================================================================
+# =============================================================================================
+def copy_site_files_abide_stanford():
+     
+    src_folder = '/usr/bmicnas01/data-biwi-01/nkarani/projects/hcp_segmentation/data/preproc_data/abide/stanford/'
+    dst_folder = '/usr/bmicnas01/data-biwi-01/nkarani/projects/generative_segmentation/data/preproc_data/abide/STANFORD/'
+    src_folders_list = sorted(glob.glob(src_folder + '*/'))
     
-    # create the pre-processing folder, if it does not exist
-    utils.makefolder(preproc_folder)    
-    
-    logging.info('============================================================')
-    logging.info('Loading data...')
+    # set the destination for this site
+    for patient_num in range(len(src_folders_list)):
         
-    # make appropriate filenames according to the requested indices of training, validation and test images
-    config_details = 'from%dto%d_' % (idx_start, idx_end)
-    if bias_correction is True:
-        filepath_images = preproc_folder + config_details + 'images_2d_bias_corrected.npy'
-    else:
-        filepath_images = preproc_folder + config_details + 'images_2d.npy'
-    filepath_masks = preproc_folder + config_details + 'annotations15_2d.npy'
-    filepath_affine = preproc_folder + config_details + 'affines.npy'
-    filepath_patnames = preproc_folder + config_details + 'patnames.npy'
-    
-    # if the images have not already been extracted, do so
-    if not os.path.exists(filepath_images) or force_overwrite:
-        logging.info('This configuration of protocol and data indices has not yet been preprocessed')
-        logging.info('Preprocessing now...')
-        images, masks, affines, patnames = prepare_data(input_folder,
-                                                        preproc_folder,
-                                                        idx_start,
-                                                        idx_end,
-                                                        bias_correction)
-    else:
-        logging.info('Already preprocessed this configuration. Loading now...')
-        # read from already created npy files
-        images = np.load(filepath_images)
-        masks = np.load(filepath_masks)
-        affines = np.load(filepath_affine)
-        patnames = np.load(filepath_patnames)
+        patient_name = src_folders_list[patient_num][:-1][src_folders_list[patient_num][:-1].rfind('/')+1:]
+        src_folder_this_patient = src_folder + patient_name
+        dst_folder_this_patient = dst_folder + patient_name
         
-    return images, masks, affines, patnames
-
-
+        if patient_name in ['A00033547']:
+            continue
+        
+        if not os.path.exists(dst_folder_this_patient):
+            os.makedirs(dst_folder_this_patient)
+            
+        # copy image and labels
+        for suffix in ['/MPRAGE.nii', '/orig_labels_aligned_with_true_image.nii.gz']:
+            copyfile(src_folder_this_patient + suffix , dst_folder_this_patient + suffix) 
+            
+# =============================================================================================
+# =============================================================================================
+def correct_bias_field():
+    
+    base_folder = '/usr/bmicnas01/data-biwi-01/nkarani/projects/generative_segmentation/data/preproc_data/abide/STANFORD/'
+    folders_list = sorted(glob.glob(base_folder + '*/'))
+    
+    for num_subject in range(len(folders_list)):
+        print('============================================')
+        print('subject ' + str(num_subject+1) + ' out of ' + str(len(folders_list)))
+        print('============================================')
+        input_img = folders_list[num_subject] + "MPRAGE.nii"
+        output_img = folders_list[num_subject] + "MPRAGE_n4.nii"
+        subprocess.call(["/usr/bmicnas01/data-biwi-01/bmicdatasets/Sharing/N4_th", input_img, output_img])
+            
 # ===============================================================
-# Main function that prepares a dataset from the raw challenge data to an hdf5 dataset.
-# Extract the required files from their zipped directories
 # ===============================================================
-def prepare_data(input_folder,
-                 preproc_folder,
+def get_image_and_label_paths(filename,
+                              protocol = '',
+                              extraction_folder = ''):
+        
+    _patname = filename[filename[:-1].rfind('/') + 1 : -1]
+    _imgpath = filename + 'MPRAGE_n4.nii'
+    _segpath = filename + 'orig_labels_aligned_with_true_image.nii.gz'
+                            
+    return _patname, _imgpath, _segpath
+                            
+# ===============================================================
+# ===============================================================
+def count_slices(filenames,
                  idx_start,
                  idx_end,
-                 bias_correction):
+                 protocol,
+                 preprocessing_folder,
+                 depth):
+
+    num_slices = 0
     
-    images = []
-    affines = []
-    patnames = []
-    masks = []
+    for idx in range(idx_start, idx_end):    
         
-    # read the foldernames
-    foldernames = sorted(glob.glob(input_folder + '*/'))
-    logging.info('Number of images in the dataset: %s' % str(len(foldernames)))
+        _, image_path, _ = get_image_and_label_paths(filenames[idx],
+                                                     protocol,
+                                                     preprocessing_folder)
         
-    # iterate through all indices
-    for idx in range(len(foldernames)):
+        image, _, _ = utils.load_nii(image_path)
         
-        # only consider images within the indices requested
-        if (idx < idx_start) or (idx >= idx_end):
-            logging.info('skipping subject: %d' %idx)
-            continue
+        # num_slices = num_slices + image.shape[1] # will append slices along axes 1
+        num_slices = num_slices + depth # the number of slices along the append axis will be fixed to this number to crop out zeros
         
-        # get the file name for this subject
-        foldername = foldernames[idx]
+    return num_slices
+
+def center_image_and_label(image, label):
+    
+    orig_image_size_x = image.shape[0]
+    orig_image_size_y = image.shape[1]
+    
+    fg_coords = np.where(label > 0)
+    x_fg_min = np.min(np.array(fg_coords)[0,:])
+    x_fg_max = np.max(np.array(fg_coords)[0,:])
+    y_fg_min = np.min(np.array(fg_coords)[1,:])
+    y_fg_max = np.max(np.array(fg_coords)[1,:])
+    
+    border = 20
+    x_min = np.maximum(x_fg_min - border, 0)
+    x_max = np.minimum(x_fg_max + border, orig_image_size_x)
+    y_min = np.maximum(y_fg_min - border, 0)
+    y_max = np.minimum(y_fg_max + border, orig_image_size_y)
+    
+    image_cropped = image[x_min:x_max, y_min:y_max, :]
+    label_cropped = label[x_min:x_max, y_min:y_max, :]
+    
+    return image_cropped, label_cropped
+
+# ===============================================================
+# ===============================================================
+def prepare_data(input_folder,
+                 output_file,
+                 site_name,
+                 idx_start,
+                 idx_end,
+                 protocol,
+                 size,
+                 depth,
+                 target_resolution,
+                 preprocessing_folder):
+
+    # ========================    
+    # read the filenames
+    # ========================
+    filenames = sorted(glob.glob(input_folder + site_name + '/*/'))
+    logging.info('Number of images in the dataset: %s' % str(len(filenames)))
+
+    # =======================
+    # =======================
+    hdf5_file = h5py.File(output_file, "w")
+
+    # ===============================
+    # Create datasets for images and labels
+    # ===============================
+    data = {}
+    num_slices = count_slices(filenames,
+                              idx_start,
+                              idx_end,
+                              protocol,
+                              preprocessing_folder,
+                              depth)
+    
+    data['images'] = hdf5_file.create_dataset("images", [num_slices] + list(size), dtype=np.float32)
+    data['labels'] = hdf5_file.create_dataset("labels", [num_slices] + list(size), dtype=np.uint8)
+    
+    # ===============================
+    # initialize lists
+    # ===============================        
+    label_list = []
+    image_list = []
+    nx_list = []
+    ny_list = []
+    nz_list = []
+    px_list = []
+    py_list = []
+    pz_list = []
+    pat_names_list = []
+    
+    # ===============================        
+    # ===============================        
+    write_buffer = 0
+    counter_from = 0
+    
+    # ===============================
+    # iterate through the requested indices
+    # ===============================
+    for idx in range(idx_start, idx_end):
         
-        # extract the patient name
-        _patname = foldername[foldername[:-1].rfind('/') + 1 : -1]
-        if _patname == 'A00033264': # this subject has images of a different size
-            continue
-            
-        # ====================================================
-        # search for the segmentation file
-        # ====================================================
-        name = foldername + 'orig_labels_aligned_with_true_image.nii.gz' # segmentation mask with ~100 classes
-        logging.info('==============================================')
-        logging.info('reading segmentation mask: %s' % name)
+        # ==================
+        # get file paths
+        # ==================
+        patient_name, image_path, label_path = get_image_and_label_paths(filenames[idx])
         
-        # read the segmentation mask
-        _seg_data, _seg_affine, _seg_header = utils.load_nii(name)
+        # ============
+        # read the image and normalize it to be between 0 and 1
+        # ============
+        image, _, image_hdr = utils.load_nii(image_path)
+        image = np.swapaxes(image, 1, 2) # swap axes 1 and 2 -> this allows appending along axis 2, as in other datasets
         
-        # group the segmentation classes as required
-        _seg_data = utils.group_segmentation_classes(_seg_data)
-                
-        # ====================================================
-        # read the image file
-        # ====================================================
-        if bias_correction is True:
-            name = foldername + 'MPRAGE_n4.nii' # read the original image
-        else:
-            name = foldername + 'MPRAGE.nii' # read the original image
-        
-        # ====================================================
-        # bias correction  before reading the image file (optional)
-        # ====================================================
-        
-        # read the image
-        logging.info('reading image: %s' % name)
-        _img_data, _img_affine, _img_header = utils.load_nii(name)
-         # _img_header.get_zooms() = (1.0, 1.0, 1.0)
+        # ==================
+        # read the label file
+        # ==================        
+        label, _, _ = utils.load_nii(label_path)        
+        label = np.swapaxes(label, 1, 2) # swap axes 1 and 2 -> this allows appending along axis 2, as in other datasets
+        label = utils.group_segmentation_classes(label) # group the segmentation classes as required
         
         # ============
         # create a segmentation mask and use it to get rid of the skull in the image
         # ============
-        seg_mask = np.copy(_seg_data)
-        seg_mask[_seg_data > 0] = 1
-        img_masked = _img_data * seg_mask
-        
-        # normalise the image
-        _img_data = utils.normalise_image(img_masked, norm_type='div_by_max')
-        
-        # ============
-        # rescale the image and the segmentation mask so that their pixel size in mm matches that of the hcp images
-        # ============
-        img_rescaled = rescale(image=_img_data, scale=10/7, order=1, preserve_range=True, multichannel=False)
-        seg_rescaled = rescale(image=_seg_data, scale=10/7, order=0, preserve_range=True, multichannel=False)
-        
-        # ============
-        # A lot of the periphery is just zeros, so get rid of some of it
-        # ============
-        # define how much of the image can be cropped out as it consists of zeros
-        x_start = 13; x_end = -14
-        y_start = 55; y_end = -55
-        z_start = 55+16+50; z_end = -55-16+50
-        # original images are 176 * 256 * 256
-        # rescaling them makes them 251 * 366 * 366 
-        # cropping them down to 224 * 256 * 224
-        img_rescaled = img_rescaled[x_start:x_end,y_start:y_end,z_start:z_end]
-        seg_rescaled = seg_rescaled[x_start:x_end,y_start:y_end,z_start:z_end]
-        
-        # save the pre-processed segmentation ground truth
-        utils.makefolder(preproc_folder + _patname)
-        utils.save_nii(preproc_folder + _patname + '/preprocessed_gt15.nii', seg_rescaled, _seg_affine)
-        if bias_correction is True:
-            utils.save_nii(preproc_folder + _patname + '/preprocessed_image_n4.nii', img_rescaled, _img_affine)
-        else:
-            utils.save_nii(preproc_folder + _patname + '/preprocessed_image.nii', img_rescaled, _img_affine)
-        
-        # append to lists
-        images.append(img_rescaled)
-        affines.append(_img_affine)
-        patnames.append(_patname)
-        masks.append(seg_rescaled)
+        label_mask = np.copy(label)
+        label_mask[label > 0] = 1
+        image = image * label_mask
 
-    # convert the lists to arrays
-    images = np.array(images)
-    affines = np.array(affines)
-    patnames = np.array(patnames)
-    masks = np.array(masks, dtype = 'uint8')
+        # ==================
+        # crop out some portion of the image, which are all zeros (rough registration via visual inspection)
+        # ==================
+        if site_name is 'CALTECH':
+            image = image[:, 80:, :]
+            label = label[:, 80:, :]
+        elif site_name is 'STANFORD':
+            image, label = center_image_and_label(image, label)
+            
+        # plt.figure(); plt.imshow(image[:,:,50], cmap='gray'); plt.title(patient_name); plt.show(); plt.close()        
+                
+        # ==================
+        # crop volume along z axis (as there are several zeros towards the ends)
+        # ==================
+        image = utils.crop_or_pad_volume_to_size_along_z(image, depth)
+        label = utils.crop_or_pad_volume_to_size_along_z(label, depth)     
+
+        # ==================
+        # collect some header info.
+        # ==================
+        px_list.append(float(image_hdr.get_zooms()[0]))
+        py_list.append(float(image_hdr.get_zooms()[2])) # since axes 1 and 2 have been swapped. this is important when dealing with pixel dimensions
+        pz_list.append(float(image_hdr.get_zooms()[1]))
+        nx_list.append(image.shape[0]) 
+        ny_list.append(image.shape[1]) # since axes 1 and 2 have been swapped. however, only the final axis locations are relevant when dealing with shapes
+        nz_list.append(image.shape[2])
+        pat_names_list.append(patient_name)
+        
+        # ==================
+        # normalize the image
+        # ==================
+        image_normalized = utils.normalise_image(image, norm_type='div_by_max')
+                        
+        # ======================================================  
+        ### PROCESSING LOOP FOR SLICE-BY-SLICE 2D DATA ###################
+        # ======================================================
+        scale_vector = [image_hdr.get_zooms()[0] / target_resolution[0],
+                        image_hdr.get_zooms()[2] / target_resolution[1]] # since axes 1 and 2 have been swapped. this is important when dealing with pixel dimensions
+
+        for zz in range(image.shape[2]):
+
+            # ============
+            # rescale the images and labels so that their orientation matches that of the nci dataset
+            # ============            
+            image2d_rescaled = rescale(np.squeeze(image_normalized[:, :, zz]),
+                                                  scale_vector,
+                                                  order=1,
+                                                  preserve_range=True,
+                                                  multichannel=False,
+                                                  mode = 'constant')
+ 
+            label2d_rescaled = rescale(np.squeeze(label[:, :, zz]),
+                                                  scale_vector,
+                                                  order=0,
+                                                  preserve_range=True,
+                                                  multichannel=False,
+                                                  mode='constant')
+            
+            # ============            
+            # crop or pad to make of the same size
+            # ============            
+            image2d_rescaled_rotated_cropped = utils.crop_or_pad_slice_to_size(image2d_rescaled, size[0], size[1])
+            label2d_rescaled_rotated_cropped = utils.crop_or_pad_slice_to_size(label2d_rescaled, size[0], size[1])
+
+            # ============   
+            # append to list
+            # ============   
+            image_list.append(image2d_rescaled_rotated_cropped)
+            label_list.append(label2d_rescaled_rotated_cropped)
+
+            write_buffer += 1
+
+            # Writing needs to happen inside the loop over the slices
+            if write_buffer >= MAX_WRITE_BUFFER:
+
+                counter_to = counter_from + write_buffer
+
+                _write_range_to_hdf5(data,
+                                     image_list,
+                                     label_list,
+                                     counter_from,
+                                     counter_to)
+                
+                _release_tmp_memory(image_list,
+                                    label_list)
+
+                # update counters 
+                counter_from = counter_to
+                write_buffer = 0
+        
+    logging.info('Writing remaining data')
+    counter_to = counter_from + write_buffer
+    _write_range_to_hdf5(data,
+                         image_list,
+                         label_list,
+                         counter_from,
+                         counter_to)
+    _release_tmp_memory(image_list,
+                        label_list)
+
+    # Write the small datasets
+    hdf5_file.create_dataset('nx', data=np.asarray(nx_list, dtype=np.uint16))
+    hdf5_file.create_dataset('ny', data=np.asarray(ny_list, dtype=np.uint16))
+    hdf5_file.create_dataset('nz', data=np.asarray(nz_list, dtype=np.uint16))
+    hdf5_file.create_dataset('px', data=np.asarray(px_list, dtype=np.float32))
+    hdf5_file.create_dataset('py', data=np.asarray(py_list, dtype=np.float32))
+    hdf5_file.create_dataset('pz', data=np.asarray(pz_list, dtype=np.float32))
+    hdf5_file.create_dataset('patnames', data=np.asarray(pat_names_list, dtype="S10"))
     
+    # After test train loop:
+    hdf5_file.close()
+
+# ===============================================================
+# Helper function to write a range of data to the hdf5 datasets
+# ===============================================================
+def _write_range_to_hdf5(hdf5_data,
+                         img_list,
+                         mask_list,
+                         counter_from,
+                         counter_to):
+
+    logging.info('Writing data from %d to %d' % (counter_from, counter_to))
+
+    img_arr = np.asarray(img_list, dtype=np.float32)
+    lab_arr = np.asarray(mask_list, dtype=np.uint8)
+
+    hdf5_data['images'][counter_from : counter_to, ...] = img_arr
+    hdf5_data['labels'][counter_from : counter_to, ...] = lab_arr
+
+# ===============================================================
+# Helper function to reset the tmp lists and free the memory
+# ===============================================================
+def _release_tmp_memory(img_list,
+                        mask_list):
+
+    img_list.clear()
+    mask_list.clear()
+    gc.collect()
+    
+# ===============================================================
+# function to read a single subjects image and labels without any pre-processing
+# ===============================================================
+def load_without_size_preprocessing(input_folder,
+                                    site_name,
+                                    idx,
+                                    depth):
+    
+    # ========================    
+    # read the filenames
     # ========================
-    # merge along the y-zis to get a stack of x-z slices, for the images as well as the masks
-    # ========================
-    images = images.swapaxes(1,2)
-    images = images.reshape(-1, images.shape[2], images.shape[3])
-    masks = masks.swapaxes(1,2)
-    masks = masks.reshape(-1, masks.shape[2], masks.shape[3])
+    filenames = sorted(glob.glob(input_folder + site_name + '/*/'))
+
+    # ==================
+    # get file paths
+    # ==================
+    patient_name, image_path, label_path = get_image_and_label_paths(filenames[idx])
     
-    # save the processed images and masks so that they can be directly read the next time
-    # make appropriate filenames according to the requested indices of training, validation and test images
-    logging.info('Saving pre-processed files...')
-    config_details = 'from%dto%d_' % (idx_start, idx_end)
+    # ============
+    # read the image and normalize it to be between 0 and 1
+    # ============
+    image, _, image_hdr = utils.load_nii(image_path)
+    image = np.swapaxes(image, 1, 2) # swap axes 1 and 2 -> this allows appending along axis 2, as in other datasets
     
-    if bias_correction is True:
-        filepath_images = preproc_folder + config_details + 'images_2d_bias_corrected.npy'
+    # ==================
+    # read the label file
+    # ==================        
+    label, _, _ = utils.load_nii(label_path)        
+    label = np.swapaxes(label, 1, 2) # swap axes 1 and 2 -> this allows appending along axis 2, as in other datasets
+    label = utils.group_segmentation_classes(label) # group the segmentation classes as required
+    
+    # ============
+    # create a segmentation mask and use it to get rid of the skull in the image
+    # ============
+    label_mask = np.copy(label)
+    label_mask[label > 0] = 1
+    image = image * label_mask
+
+    # ==================
+    # crop out some portion of the image, which are all zeros (rough registration via visual inspection)
+    # ==================
+    if site_name is 'CALTECH':
+        image = image[:, 80:, :]
+        label = label[:, 80:, :]
+    elif site_name is 'STANFORD':
+        image, label = center_image_and_label(image, label)
+    
+    # ==================
+    # crop volume along z axis (as there are several zeros towards the ends)
+    # ==================
+    image = utils.crop_or_pad_volume_to_size_along_z(image, depth)
+    label = utils.crop_or_pad_volume_to_size_along_z(label, depth)     
+    
+    # ==================
+    # normalize the image    
+    # ==================
+    image = utils.normalise_image(image, norm_type='div_by_max')
+    
+    return image, label
+
+# ===============================================================
+# ===============================================================
+def load_and_maybe_process_data(input_folder,
+                                preprocessing_folder,
+                                site_name,
+                                idx_start,
+                                idx_end,
+                                protocol,
+                                size,
+                                depth,
+                                target_resolution,
+                                force_overwrite=False):
+
+    size_str = '_'.join([str(i) for i in size])
+    res_str = '_'.join([str(i) for i in target_resolution])
+    
+    preprocessing_folder = preprocessing_folder + site_name + '/'
+
+    data_file_name = 'data_%s_2d_size_%s_depth_%d_res_%s_from_%d_to_%d.hdf5' % (protocol, size_str, depth, res_str, idx_start, idx_end)
+    data_file_path = os.path.join(preprocessing_folder, data_file_name)
+
+    utils.makefolder(preprocessing_folder)
+
+    if not os.path.exists(data_file_path) or force_overwrite:
+        logging.info('This configuration of mode, size and target resolution has not yet been preprocessed')
+        logging.info('Preprocessing now!')
+        prepare_data(input_folder,
+                     data_file_path,
+                     site_name,
+                     idx_start,
+                     idx_end,
+                     protocol,
+                     size,
+                     depth,
+                     target_resolution,
+                     preprocessing_folder)
     else:
-        filepath_images = preproc_folder + config_details + 'images_2d.npy'
-    filepath_masks = preproc_folder + config_details + 'annotations15_2d.npy'
-    filepath_affine = preproc_folder + config_details + 'affines.npy'
-    filepath_patnames = preproc_folder + config_details + 'patnames.npy'
-    
-    np.save(filepath_images, images)
-    np.save(filepath_masks, masks)
-    np.save(filepath_affine, affines)
-    np.save(filepath_patnames, patnames)
-                      
-    return images, masks, affines, patnames
+        logging.info('Already preprocessed this configuration. Loading now!')
 
+    return h5py.File(data_file_path, 'r')
 
-## ===============================================================
-## Main function that runs if this file is run directly
-## ===============================================================
+# ===============================================================
+# ===============================================================
 if __name__ == '__main__':
-
-    #copy_site_files()
-    input_folder = '/usr/bmicnas01/data-biwi-01/nkarani/projects/hcp_segmentation/data/preproc_data/abide/'
-
-    i, g, _, _ = load_data(input_folder = input_folder + 'caltech/',
-                           preproc_folder = sys_config.preproc_folder_abide + 'caltech/',
-                           idx_start = 18,  # test
-                           idx_end = 36,  # test
-                           bias_correction = False,
-                           force_overwrite = True)
     
-    logging.info('%s, %s' %(str(i.shape), str(g.shape)))
-
-#    
-#    import matplotlib.pyplot as plt
-#    for z_idx in np.arange(10,120,10):
-#        plt.figure(figsize=(10,10))
-#        s_idx = 0
-#        plt.subplot(121); plt.imshow(i[s_idx,:,z_idx,:], cmap='gray'); plt.title(str(z_idx))
-#        plt.subplot(122); plt.imshow(g[s_idx,:,z_idx,:], cmap='tab20')
-#        plt.show()
-#        plt.close()
-#    
+    #copy_site_files_abide_caltech()
+        
+    sites = ['CALTECH', 'STANFORD']
+    site_num = 1 # 0/1
     
-# ===============================================================
-# End of file
-# ===============================================================
+    input_folder = sys_config.orig_data_root_abide
+    preprocessing_folder = sys_config.preproc_folder_abide
+
+    data_hcp = load_and_maybe_process_data(input_folder,
+                                           preprocessing_folder,
+                                           sites[site_num],
+                                           idx_start = 0,
+                                           idx_end = 2,
+                                           protocol = 'T1',
+                                           size = (256, 256),
+                                           depth = 256, 
+                                           target_resolution = (0.7, 0.7),
+                                           force_overwrite=True)
