@@ -10,10 +10,11 @@ import numpy as np
 import utils
 import model as model
 import config.system as sys_config
-import data.data_hcp as data_hcp
-import data.data_abide as data_abide
 import scipy.ndimage.interpolation
 from skimage import transform
+
+import data.data_hcp as data_hcp
+import data.data_abide as data_abide
 
 # ==================================================================
 # Set the config file of the experiment you want to run here:
@@ -67,19 +68,106 @@ def run_training(continue_run):
     logging.info('============================================================')
     logging.info('Loading data...')
     if exp_config.train_dataset is 'HCPT1':
-        logging.info('Reading HCP - 3T - T1 images...')    
+        logging.info('Reading HCPT1 images...')    
         logging.info('Data root directory: ' + sys_config.orig_data_root_hcp)
-        imtr, gttr, _, _ = data_hcp.load_data(sys_config.orig_data_root_hcp, sys_config.preproc_folder_hcp, 'T1w_', 1, 31)
-        imvl, gtvl, _, _ = data_hcp.load_data(sys_config.orig_data_root_hcp, sys_config.preproc_folder_hcp, 'T1w_', 31, 37)
+        data_brain_train = data_hcp.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_hcp,
+                                                                preprocessing_folder = sys_config.preproc_folder_hcp,
+                                                                idx_start = 0,
+                                                                idx_end = 20,             
+                                                                protocol = 'T1',
+                                                                size = exp_config.image_size,
+                                                                depth = exp_config.image_depth_hcp,
+                                                                target_resolution = exp_config.target_resolution_brain)
+        imtr, gttr = [ data_brain_train['images'], data_brain_train['labels'] ]
+        
+        data_brain_val = data_hcp.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_hcp,
+                                                              preprocessing_folder = sys_config.preproc_folder_hcp,
+                                                              idx_start = 20,
+                                                              idx_end = 25,             
+                                                              protocol = 'T1',
+                                                              size = exp_config.image_size,
+                                                              depth = exp_config.image_depth_hcp,
+                                                              target_resolution = exp_config.target_resolution_brain)
+        imvl, gtvl = [ data_brain_val['images'], data_brain_val['labels'] ]
+        
+    if exp_config.train_dataset is 'HCPT2':
+        logging.info('Reading HCPT2 images...')    
+        logging.info('Data root directory: ' + sys_config.orig_data_root_hcp)
+        data_brain_train = data_hcp.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_hcp,
+                                                                preprocessing_folder = sys_config.preproc_folder_hcp,
+                                                                idx_start = 0,
+                                                                idx_end = 20,             
+                                                                protocol = 'T2',
+                                                                size = exp_config.image_size,
+                                                                depth = exp_config.image_depth_hcp,
+                                                                target_resolution = exp_config.target_resolution_brain)
+        imtr, gttr = [ data_brain_train['images'], data_brain_train['labels'] ]
+        
+        data_brain_val = data_hcp.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_hcp,
+                                                              preprocessing_folder = sys_config.preproc_folder_hcp,
+                                                              idx_start = 20,
+                                                              idx_end = 25,             
+                                                              protocol = 'T2',
+                                                              size = exp_config.image_size,
+                                                              depth = exp_config.image_depth_hcp,
+                                                              target_resolution = exp_config.target_resolution_brain)
+        imvl, gtvl = [ data_brain_val['images'], data_brain_val['labels'] ]
+        
     elif exp_config.train_dataset is 'CALTECH':
-        logging.info('Reading Caltech - 3T - T1 images...')    
-        logging.info('Data root directory: ' + sys_config.orig_data_root_abide)
-        imtr, gttr, _, _  = data_abide.load_data(sys_config.orig_data_root_abide + 'caltech/', sys_config.preproc_folder_abide + 'caltech/', 2, 18, bias_correction=True)
-        imvl, gtvl, _, _  = data_abide.load_data(sys_config.orig_data_root_abide + 'caltech/', sys_config.preproc_folder_abide + 'caltech/', 0, 2, bias_correction=True)
-    logging.info('Training Images: %s' %str(imtr.shape)) # expected: [num_subjects, img_size_x, img_size_y, img_size_x]
-    logging.info('Training Labels: %s' %str(gttr.shape)) # expected: [num_subjects, img_size_x, img_size_y, img_size_x]
-    logging.info('Validation Images: %s' %str(imvl.shape))
-    logging.info('Validation Labels: %s' %str(gtvl.shape))
+        logging.info('Reading CALTECH images...')    
+        logging.info('Data root directory: ' + sys_config.orig_data_root_abide + 'CALTECH/')      
+        data_brain_train = data_abide.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_abide,
+                                                                  preprocessing_folder = sys_config.preproc_folder_abide,
+                                                                  site_name = 'CALTECH',
+                                                                  idx_start = 0,
+                                                                  idx_end = 10,             
+                                                                  protocol = 'T1',
+                                                                  size = exp_config.image_size,
+                                                                  depth = exp_config.image_depth_caltech,
+                                                                  target_resolution = exp_config.target_resolution_brain)
+        imtr, gttr = [ data_brain_train['images'], data_brain_train['labels'] ]
+        
+        data_brain_val = data_abide.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_abide,
+                                                                preprocessing_folder = sys_config.preproc_folder_abide,
+                                                                site_name = 'CALTECH',
+                                                                idx_start = 10,
+                                                                idx_end = 15,             
+                                                                protocol = 'T1',
+                                                                size = exp_config.image_size,
+                                                                depth = exp_config.image_depth_caltech,
+                                                                target_resolution = exp_config.target_resolution_brain)
+        imvl, gtvl = [ data_brain_val['images'], data_brain_val['labels'] ]
+        
+    elif exp_config.train_dataset is 'STANFORD':
+        logging.info('Reading STANFORD images...')    
+        logging.info('Data root directory: ' + sys_config.orig_data_root_abide + 'STANFORD/')      
+        data_brain_train = data_abide.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_abide,
+                                                                  preprocessing_folder = sys_config.preproc_folder_abide,
+                                                                  site_name = 'STANFORD',
+                                                                  idx_start = 0,
+                                                                  idx_end = 10,             
+                                                                  protocol = 'T1',
+                                                                  size = exp_config.image_size,
+                                                                  depth = exp_config.image_depth_stanford,
+                                                                  target_resolution = exp_config.target_resolution_brain)
+        imtr, gttr = [ data_brain_train['images'], data_brain_train['labels'] ]
+        
+        data_brain_val = data_abide.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_abide,
+                                                                preprocessing_folder = sys_config.preproc_folder_abide,
+                                                                site_name = 'STANFORD',
+                                                                idx_start = 10,
+                                                                idx_end = 15,             
+                                                                protocol = 'T1',
+                                                                size = exp_config.image_size,
+                                                                depth = exp_config.image_depth_stanford,
+                                                                target_resolution = exp_config.target_resolution_brain)
+        imvl, gtvl = [ data_brain_val['images'], data_brain_val['labels'] ]
+
+        
+    logging.info('Training Images D1: %s' %str(imtr.shape)) # expected: [num_slices, img_size_x, img_size_y]
+    logging.info('Training Labels D1: %s' %str(gttr.shape)) # expected: [num_slices, img_size_x, img_size_y]
+    logging.info('Validation Images D1: %s' %str(imvl.shape))
+    logging.info('Validation Labels D1: %s' %str(gtvl.shape))
     logging.info('============================================================')
                 
     # ================================================================
@@ -103,16 +191,24 @@ def run_training(continue_run):
         labels_pl = tf.placeholder(tf.uint8, shape=mask_tensor_shape, name = 'labels')
         learning_rate_pl = tf.placeholder(tf.float32, shape=[], name = 'learning_rate')
         training_pl = tf.placeholder(tf.bool, shape=[], name = 'training_or_testing')
+        
+        # ================================================================
+        # insert a normalization module in front of the segmentation network
+        # the normalization module will be adapted for each test image
+        # ================================================================
+        images_normalized, _ = model.normalize(images_pl,
+                                               exp_config,
+                                               training_pl)     
 
         # ================================================================
         # build the graph that computes predictions from the inference model
         # ================================================================
-        logits, _, _ = model.predict_i2l(images_pl,
+        logits, _, _ = model.predict_i2l(images_normalized,
                                          exp_config,
                                          training_pl = training_pl)
         
-        print('shape of inputs: ', images_pl.shape) # (batch_size, 224, 224, 1)
-        print('shape of logits: ', logits.shape) # (batch_size, 224, 224, 15)
+        print('shape of inputs: ', images_pl.shape) # (batch_size, 256, 256, 1)
+        print('shape of logits: ', logits.shape) # (batch_size, 256, 256, 15)
         
         # ================================================================
         # create a list of all vars that must be optimized wrt
@@ -248,11 +344,11 @@ def run_training(continue_run):
         # ================================================================
         # run training epochs
         # ================================================================
-        for epoch in range(exp_config.max_epochs):
+        while (step < exp_config.max_steps):
 
-            if epoch % 50 is 0:
+            if step % 1000 is 0:
                 logging.info('============================================================')
-                logging.info('EPOCH %d' % epoch)
+                logging.info('step %d' % step)
         
             # ================================================               
             # batches
@@ -420,8 +516,6 @@ def iterate_minibatches(images,
     random_indices = np.random.permutation(n_images)
 
     # ===========================
-    # using only a fraction of the batches in each epoch
-    # ===========================
     for b_i in range(n_images // batch_size):
 
         if b_i + batch_size > n_images:
@@ -443,31 +537,47 @@ def iterate_minibatches(images,
             if train_or_eval is 'train' or train_or_eval is 'eval':
                 x, y = do_data_augmentation(images = x,
                                             labels = y,
-                                            data_aug_ratio = exp_config.da_ratio)   
+                                            data_aug_ratio = exp_config.da_ratio,
+                                            sigma = exp_config.sigma,
+                                            alpha = exp_config.alpha,
+                                            trans_min = exp_config.trans_min,
+                                            trans_max = exp_config.trans_max,
+                                            rot_min = exp_config.rot_min,
+                                            rot_max = exp_config.rot_max,
+                                            scale_min = exp_config.scale_min,
+                                            scale_max = exp_config.scale_max,
+                                            gamma_min = exp_config.gamma_min,
+                                            gamma_max = exp_config.gamma_max,
+                                            brightness_min = exp_config.brightness_min,
+                                            brightness_max = exp_config.brightness_max,
+                                            noise_min = exp_config.noise_min,
+                                            noise_max = exp_config.noise_max)
 
         x = np.expand_dims(x, axis=-1)
         
         yield x, y
         
-# ===========================        
+# ===========================      
+# data augmentation: random elastic deformations, translations, rotations, scaling
+# data augmentation: gamma contrast, brightness (one number added to the entire slice), additive noise (random gaussian noise image added to the slice)
 # ===========================        
 def do_data_augmentation(images,
                          labels,
                          data_aug_ratio,
-                         sigma = 20,
-                         alpha = 500,
-                         trans_min = -10,
-                         trans_max = 10,
-                         rot_min = -10,
-                         rot_max = 10,
-                         scale_min = 0.9,
-                         scale_max = 1.1,
-                         gamma_min = 0.5,
-                         gamma_max = 2.0,
-                         brightness_min = 0.0,
-                         brightness_max = 0.1,
-                         noise_min = 0.0,
-                         noise_max = 0.1):
+                         sigma,
+                         alpha,
+                         trans_min,
+                         trans_max,
+                         rot_min,
+                         rot_max,
+                         scale_min,
+                         scale_max,
+                         gamma_min,
+                         gamma_max,
+                         brightness_min,
+                         brightness_max,
+                         noise_min,
+                         noise_max):
         
     images_ = np.copy(images)
     labels_ = np.copy(labels)
