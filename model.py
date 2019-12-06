@@ -44,20 +44,11 @@ def predict_l2l(inputs,
     logits = exp_config.model_handle_l2l(inputs,
                                          nlabels = exp_config.nlabels,
                                          training_pl = training_pl)
+    
+    softmax = tf.nn.softmax(logits)
+    mask = tf.argmax(softmax, axis=-1)
 
-    return logits
-
-# ================================================================
-# ================================================================
-def predict_l2l_vae(inputs,
-                    exp_config,
-                    training_pl):
-
-    logits, z_mu, z_log_sigma_sq = exp_config.model_handle_l2l_vae(inputs,
-                                                                   nlabels = exp_config.nlabels,
-                                                                   training_pl = training_pl)
-
-    return logits, z_mu, z_log_sigma_sq
+    return logits, softmax, mask
 
 # ================================================================
 # ================================================================
@@ -128,37 +119,6 @@ def likelihood_loss(pred_img_from_pred_seg_inverted,
 
 # ================================================================
 # ================================================================
-#def likelihood_loss(pred_img_from_pred_seg,
-#                    img_norm,
-#                    img_orig,
-#                    loss_type):
-#    
-#    if loss_type is 'l2':
-#        loss_likelihood_op = tf.reduce_mean(tf.reduce_sum(tf.square(pred_img_from_pred_seg - img_norm), axis=[1,2,3]))
-#        
-#    elif loss_type is 'l2_wrt_orig':
-#        loss_likelihood_op = tf.reduce_mean(tf.reduce_sum(tf.square(pred_img_from_pred_seg - img_orig), axis=[1,2,3]))
-#        
-#    elif loss_type is 'ssim':    
-#        loss_likelihood_op = 1 - tf.reduce_mean(tf.image.ssim(img1 = pred_img_from_pred_seg,
-#                                                              img2 = img_norm,
-#                                                              max_val = 1.0))
-#    
-#    elif loss_type is 'ssim_wrt_orig': 
-#        loss_likelihood_op = 1 - tf.reduce_mean(tf.image.ssim(img1 = pred_img_from_pred_seg,
-#                                                              img2 = img_orig,
-#                                                              max_val = 1.0))
-#    
-#    elif loss_type is 'ssim_ms':    
-#        loss_likelihood_op = 1 - tf.reduce_mean(tf.image.ssim_multiscale(img1 = pred_img_from_pred_seg,
-#                                                                         img2 = img_norm,
-#                                                                         max_val = 1.0))
-#        
-#    return loss_likelihood_op
-
-
-# ================================================================
-# ================================================================
 def training_step(loss,
                   var_list,
                   optimizer_handle,
@@ -180,7 +140,6 @@ def training_step(loss,
         train_op = tf.group([train_op, opt_memory_update_ops])
 
     return train_op
-
 
 # ================================================================
 # ================================================================
@@ -274,31 +233,42 @@ def evaluation_l2l(logits,
 
 
     mask_predicted = tf.argmax(tf.nn.softmax(logits, axis=-1), axis=-1)    
+    
     if are_labels_1hot is False:
         mask_gt = labels
         mask_masked = labels_masked
     else:
         mask_gt = tf.argmax(labels, axis=-1)
         mask_masked = tf.argmax(labels_masked, axis=-1)
-    
+
     # =================
     # write some segmentations to tensorboard
     # =================
-    gt1 = prepare_tensor_for_summary(mask_gt, mode='mask', n_idx_batch=0, nlabels=nlabels)
-    gt2 = prepare_tensor_for_summary(mask_gt, mode='mask', n_idx_batch=1, nlabels=nlabels)
-    gt3 = prepare_tensor_for_summary(mask_gt, mode='mask', n_idx_batch=2, nlabels=nlabels)
+    z=0
+    z_idx = [10+z,20+z,30+z,40+z,50+z]
+    gt1 = prepare_tensor_for_summary(mask_gt, mode='mask', n_idx_z=z_idx[0], nlabels=nlabels)
+    gt2 = prepare_tensor_for_summary(mask_gt, mode='mask', n_idx_z=z_idx[1], nlabels=nlabels)
+    gt3 = prepare_tensor_for_summary(mask_gt, mode='mask', n_idx_z=z_idx[2], nlabels=nlabels)
+    gt4 = prepare_tensor_for_summary(mask_gt, mode='mask', n_idx_z=z_idx[3], nlabels=nlabels)
+    gt5 = prepare_tensor_for_summary(mask_gt, mode='mask', n_idx_z=z_idx[4], nlabels=nlabels)
     
-    gt1_masked = prepare_tensor_for_summary(mask_masked, mode='mask', n_idx_batch=0, nlabels=nlabels)
-    gt2_masked = prepare_tensor_for_summary(mask_masked, mode='mask', n_idx_batch=1, nlabels=nlabels)
-    gt3_masked = prepare_tensor_for_summary(mask_masked, mode='mask', n_idx_batch=2, nlabels=nlabels)
+    gt1_masked = prepare_tensor_for_summary(mask_masked, mode='mask', n_idx_z=z_idx[0], nlabels=nlabels)
+    gt2_masked = prepare_tensor_for_summary(mask_masked, mode='mask', n_idx_z=z_idx[1], nlabels=nlabels)
+    gt3_masked = prepare_tensor_for_summary(mask_masked, mode='mask', n_idx_z=z_idx[2], nlabels=nlabels)
+    gt4_masked = prepare_tensor_for_summary(mask_masked, mode='mask', n_idx_z=z_idx[3], nlabels=nlabels)
+    gt5_masked = prepare_tensor_for_summary(mask_masked, mode='mask', n_idx_z=z_idx[4], nlabels=nlabels)
     
-    pred1 = prepare_tensor_for_summary(mask_predicted, mode='mask', n_idx_batch=0, nlabels=nlabels)
-    pred2 = prepare_tensor_for_summary(mask_predicted, mode='mask', n_idx_batch=1, nlabels=nlabels)
-    pred3 = prepare_tensor_for_summary(mask_predicted, mode='mask', n_idx_batch=2, nlabels=nlabels)
+    pred1 = prepare_tensor_for_summary(mask_predicted, mode='mask', n_idx_z=z_idx[0], nlabels=nlabels)
+    pred2 = prepare_tensor_for_summary(mask_predicted, mode='mask', n_idx_z=z_idx[1], nlabels=nlabels)
+    pred3 = prepare_tensor_for_summary(mask_predicted, mode='mask', n_idx_z=z_idx[2], nlabels=nlabels)
+    pred4 = prepare_tensor_for_summary(mask_predicted, mode='mask', n_idx_z=z_idx[3], nlabels=nlabels)
+    pred5 = prepare_tensor_for_summary(mask_predicted, mode='mask', n_idx_z=z_idx[4], nlabels=nlabels)
     
-    tf.summary.image('example_labels_true', tf.concat([gt1, gt2, gt3], axis=0))
-    tf.summary.image('example_labels_masked', tf.concat([gt1_masked, gt2_masked, gt3_masked], axis=0))
-    tf.summary.image('example_labels_pred', tf.concat([pred1, pred2, pred3], axis=0))
+    tf.summary.image('example_labels_true_masked_pred1', tf.concat([gt1, gt1_masked, pred1], axis=0))
+    tf.summary.image('example_labels_true_masked_pred2', tf.concat([gt2, gt2_masked, pred2], axis=0))
+    tf.summary.image('example_labels_true_masked_pred3', tf.concat([gt3, gt3_masked, pred3], axis=0))
+    tf.summary.image('example_labels_true_masked_pred4', tf.concat([gt4, gt4_masked, pred4], axis=0))
+    tf.summary.image('example_labels_true_masked_pred5', tf.concat([gt5, gt5_masked, pred5], axis=0))
 
     return supervised_loss, mean_dice
 
@@ -367,7 +337,7 @@ def prepare_tensor_for_summary(img,
         if img.get_shape().ndims == 3:
             V = tf.slice(img, (n_idx_batch, 0, 0), (1, -1, -1))
         elif img.get_shape().ndims == 4:
-            V = tf.slice(img, (n_idx_batch, 0, 0, n_idx_z), (1, -1, -1, 1))
+            V = tf.slice(img, (n_idx_batch, n_idx_z, 0, 0), (1, 1, -1, -1))
         elif img.get_shape().ndims == 5:
             V = tf.slice(img, (n_idx_batch, 0, 0, n_idx_z, 0), (1, -1, -1, 1, 1))
         else: raise ValueError('Dont know how to deal with input dimension %d' % (img.get_shape().ndims))
@@ -391,6 +361,8 @@ def prepare_tensor_for_summary(img,
 
     V *= 255
     V = tf.cast(V, dtype=tf.uint8) # (1,224,224)
+    V = tf.squeeze(V)
+    V = tf.expand_dims(V, axis=0)
     
     # gather
     if mode == 'mask':
