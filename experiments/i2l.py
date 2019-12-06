@@ -1,18 +1,18 @@
 import model_zoo
 import tensorflow as tf
 
-# ======================================================================
-# Model settings
-# ======================================================================
-
 # training dataset
-train_dataset = 'HCPT1'
+train_dataset = 'HCPT2' # CALTECH, STANFORD, HCPT1, HCPT2
 tr_str = 'tr' + train_dataset
+
+# run number
+run_number = 1
+run_str = '_run' + str(run_number)
 
 # data aug settings
 da_ratio = 0.25
 sigma = 20
-alpha = 500
+alpha = 1000
 trans_min = -10
 trans_max = 10
 rot_min = -10
@@ -27,46 +27,40 @@ noise_min = 0.0
 noise_max = 0.1
 da_str = '_da' + str(da_ratio)
 
-# run number
-run_number = 1
-run_str = '_run' + str(run_number)
-
+# Model settings : i2l
 model_handle_i2l = model_zoo.unet2D_i2l
-experiment_name_i2l = 'i2l_mapper/' + tr_str + da_str + run_str
+experiment_name_i2l = 'i2i2l_mapper/' + tr_str + da_str + run_str
+
+# Model settings : i2i
+model_handle_normalizer = model_zoo.net2D_i2i
+norm_kernel_size = 3
+norm_num_hidden_layers = 2
+norm_num_filters_per_layer = 16
+norm_activation = 'rbf'
+norm_batch_norm = False
 
 # ======================================================================
 # data settings
 # ======================================================================
 data_mode = '2D'
-image_size = (224, 224)
+image_size = (256, 256)
+image_depth_hcp = 256
+image_depth_caltech = 256
+image_depth_stanford = 132
+target_resolution_brain = (0.7, 0.7)
 nlabels = 15
 loss_type_i2l = 'dice'
 
 # ======================================================================
 # training settings
 # ======================================================================
-max_epochs = 1000
+max_steps = 50000
 batch_size = 16
 learning_rate = 1e-3    
 optimizer_handle = tf.train.AdamOptimizer
-summary_writing_frequency = 20
-train_eval_frequency = 500
-val_eval_frequency = 500
-save_frequency = 500
-continue_run = False
+summary_writing_frequency = 50
+train_eval_frequency = 1000
+val_eval_frequency = 1000
+save_frequency = 1000
+continue_run = True
 debug = False
-
-# ======================================================================
-# test settings
-# ======================================================================
-## iteration number to be loaded after training the model (setting this to zero will load the model with the best validation dice score)
-load_this_iter = 0
-batch_size_test = 1
-test_dataset = 'CALTECH' # 'HCPT1' or 'HCPT2' or 'CALTECH' or 'PFIZER'
-
-if test_dataset is 'HCPT1':
-    image_depth = 256
-elif test_dataset is 'HCPT2':
-    image_depth = 256
-elif test_dataset is 'CALTECH':
-    image_depth = 256
