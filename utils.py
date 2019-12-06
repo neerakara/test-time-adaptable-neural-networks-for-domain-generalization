@@ -4,6 +4,7 @@ import os
 import glob
 from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import morphology
 
 # ===================================================
 # ===================================================
@@ -107,6 +108,56 @@ def crop_or_pad_slice_to_size(slice, nx, ny):
             slice_cropped[x_c:x_c + x, y_c:y_c + y] = slice[:, :]
 
     return slice_cropped
+
+# ===============================================================
+# ===============================================================
+def crop_or_pad_volume_to_size_along_x(vol, nx):
+    
+    x = vol.shape[0]
+    x_s = (x - nx) // 2
+    x_c = (nx - x) // 2
+
+    if x > nx: # original volume has more slices that the required number of slices
+        vol_cropped = vol[x_s:x_s + nx, :, :]
+    else: # original volume has equal of fewer slices that the required number of slices
+        vol_cropped = np.zeros((nx, vol.shape[1], vol.shape[2]))
+        vol_cropped[x_c:x_c + x, :, :] = vol
+
+    return vol_cropped
+
+# ===============================================================
+# ===============================================================
+def crop_or_pad_volume_to_size_along_x_1hot(vol, nx):
+    
+    x = vol.shape[0]
+    x_s = (x - nx) // 2
+    x_c = (nx - x) // 2
+
+    if x > nx: # original volume has more slices that the required number of slices
+        vol_cropped = vol[x_s:x_s + nx, :, :, :]
+    else: # original volume has equal of fewer slices that the required number of slices
+        vol_cropped = np.zeros((nx, vol.shape[1], vol.shape[2], vol.shape[3]))
+        vol_cropped[x_c:x_c + x, :, :, :] = vol
+        vol_cropped[:x_c, :, :, 0] = 1
+        vol_cropped[x_c+x:, :, :, 0] = 1
+
+    return vol_cropped
+
+# ===============================================================
+# ===============================================================
+def crop_or_pad_volume_to_size_along_z(vol, nz):
+    
+    z = vol.shape[2]
+    z_s = (z - nz) // 2
+    z_c = (nz - z) // 2
+
+    if z > nz: # original volume has more slices that the required number of slices
+        vol_cropped = vol[:, :, z_s:z_s + nz]
+    else: # original volume has equal of fewer slices that the required number of slices
+        vol_cropped = np.zeros((vol.shape[0], vol.shape[1], nz))
+        vol_cropped[:, :, z_c:z_c + z] = vol
+    
+    return vol_cropped
 
 # ===============================================================
 # Group the segmentation classes into the required categories 
@@ -239,12 +290,99 @@ def elastic_transform_label(label, # 2d
     
     return distored_label
 
+# ==================================================================
+# taken from: https://gist.github.com/erniejunior/601cdf56d2b424757de5
+# ==================================================================   
+def elastic_transform_label_3d(label, # 3d
+                               sigma,
+                               alpha,
+                               random_state=None):
+
+    if random_state is None:
+        random_state = np.random.RandomState(None)
+
+    shape = (label.shape[1], label.shape[2])    
+    
+    dx = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma, mode="constant", cval=0) * alpha
+    dy = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma, mode="constant", cval=0) * alpha
+    
+    x, y = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]))
+    
+    indices = np.reshape(y+dy, (-1, 1)), np.reshape(x+dx, (-1, 1))
+
+    distored_label = np.copy(label)
+    # save deformation field for all slices of the image
+    for zz in range(label.shape[0]):
+        distored_label[zz,:,:] = map_coordinates(label[zz,:,:], indices, order=0, mode='reflect').reshape(shape)
+    
+    return distored_label
+
 # ===============================================================
 # ===============================================================
-def make_onehot(a):
+#def make_onehot(a):
+#    # taken from https://stackoverflow.com/questions/36960320/convert-a-2d-matrix-to-a-3d-one-hot-matrix-numpy/36960495
+#    ncols = a.max()+1
+#    out = np.zeros((a.size,ncols), dtype=np.uint8)
+#    out[np.arange(a.size),a.ravel()] = 1
+#    out.shape = a.shape + (ncols,)
+#    return out
+
+# ===============================================================
+# ===============================================================
+def make_onehot(arr, nlabels):
+
     # taken from https://stackoverflow.com/questions/36960320/convert-a-2d-matrix-to-a-3d-one-hot-matrix-numpy/36960495
-    ncols = a.max()+1
-    out = np.zeros((a.size,ncols), dtype=np.uint8)
-    out[np.arange(a.size),a.ravel()] = 1
-    out.shape = a.shape + (ncols,)
+    ncols = nlabels
+    out = np.zeros((arr.size, ncols), dtype=np.uint8)
+    out[np.arange(arr.size), arr.ravel()] = 1
+    out.shape = arr.shape + (ncols,)
     return out
+
+# ================================================================== 
+# Computes hausdorff distance between binary labels (compute separately for each label)
+# ==================================================================    
+def compute_surface_distance_per_label(y_1,
+                                       y_2,
+                                       sampling = 1,
+                                       connectivity = 1):
+
+    y1 = np.atleast_1d(y_1.astype(np.bool))
+    y2 = np.atleast_1d(y_2.astype(np.bool))
+    
+    conn = morphology.generate_binary_structure(y1.ndim, connectivity)
+
+    S1 = y1.astype(np.float32) - morphology.binary_erosion(y1, conn).astype(np.float32)
+    S2 = y2.astype(np.float32) - morphology.binary_erosion(y2, conn).astype(np.float32)
+    
+    S1 = S1.astype(np.bool)
+    S2 = S2.astype(np.bool)
+    
+    dta = morphology.distance_transform_edt(~S1, sampling)
+    dtb = morphology.distance_transform_edt(~S2, sampling)
+    
+    sds = np.concatenate([np.ravel(dta[S2 != 0]), np.ravel(dtb[S1 != 0])])
+    
+    return sds
+
+# ==================================================================   
+# ==================================================================   
+def compute_surface_distance(y1,
+                             y2,
+                             nlabels):
+    
+    mean_surface_distance_list = []
+    hausdorff_distance_list = []
+    
+    for l in range(1, nlabels):
+
+        surface_distance = compute_surface_distance_per_label(y_1 = (y1 == l),
+                                                              y_2 = (y2 == l))
+    
+        mean_surface_distance = surface_distance.mean()
+        # hausdorff_distance = surface_distance.max()
+        hausdorff_distance = np.percentile(surface_distance, 95)
+
+        mean_surface_distance_list.append(mean_surface_distance)
+        hausdorff_distance_list.append(hausdorff_distance)
+        
+    return np.array(hausdorff_distance_list)
