@@ -2,7 +2,7 @@ import model_zoo
 import tensorflow as tf
 
 # training dataset
-train_dataset = 'HCPT2' # CALTECH, STANFORD, HCPT1, HCPT2
+train_dataset = 'HCPT1' # CALTECH, STANFORD, HCPT1, HCPT2
 tr_str = 'tr' + train_dataset
 
 # run number
@@ -58,9 +58,9 @@ max_steps = 50000
 batch_size = 16
 learning_rate = 1e-3    
 optimizer_handle = tf.train.AdamOptimizer
-summary_writing_frequency = 50
+summary_writing_frequency = 100
 train_eval_frequency = 1000
 val_eval_frequency = 1000
 save_frequency = 1000
-continue_run = True
+continue_run = False
 debug = False

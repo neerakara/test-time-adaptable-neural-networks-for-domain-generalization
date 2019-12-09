@@ -35,7 +35,7 @@ mask_radius = 10 # The mask will be a square with side length twice this number
 num_squares = 200
 is_num_masks_fixed = False
 is_size_masks_fixed = False
-mask_str = '/' + mask_type + '_len' + str(2*mask_radius) + 'x' + str(num_squares)
+mask_str = '_mask_' + mask_type + '_maxlen' + str(2*mask_radius) + 'x' + str(num_squares)
 
 experiment_name_l2l = 'l2l_mapper/' + tr_str + da_str + res_str + model_str + mask_str + run_str
 
