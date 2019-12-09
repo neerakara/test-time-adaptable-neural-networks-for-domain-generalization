@@ -98,7 +98,7 @@ def predict_segmentation(subject_name,
         # Restore the segmentation network parameters
         # ================================================================
         logging.info('============================================================')        
-        path_to_model = sys_config.log_root + 'i2l_mapper/' + exp_config.expname_i2l + '/models/'
+        path_to_model = sys_config.log_root + 'i2i2l_mapper/' + exp_config.expname_i2l + '/models/'
         checkpoint_path = utils.get_latest_model_checkpoint_path(path_to_model, 'best_dice.ckpt')
         logging.info('Restoring the trained parameters from %s...' % checkpoint_path)
         saver_i2l.restore(sess, checkpoint_path)
@@ -271,7 +271,7 @@ def main():
     if exp_config.normalize is True:
         log_dir = os.path.join(sys_config.log_root, exp_config.expname_normalizer)
     else:
-        log_dir = sys_config.log_root + 'i2l_mapper/' + exp_config.expname_i2l
+        log_dir = sys_config.log_root + 'i2i2l_mapper/' + exp_config.expname_i2l
 
     # ================================   
     # open a text file for writing the mean dice scores for each subject that is evaluated
@@ -279,7 +279,6 @@ def main():
     results_file = open(log_dir + '/' + test_dataset_name + '_' + 'test' + '.txt', "w")
     results_file.write("================================== \n") 
     results_file.write("Test results \n") 
-    results_file.write("Patient id: mean, std. deviation over foreground labels (WRT Ground truth labels obtained from Freesurfer)\n")
     
     # ================================================================
     # For each test image, load the best model and compute the dice with this model

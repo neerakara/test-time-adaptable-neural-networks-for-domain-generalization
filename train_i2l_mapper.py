@@ -164,10 +164,10 @@ def run_training(continue_run):
         imvl, gtvl = [ data_brain_val['images'], data_brain_val['labels'] ]
 
         
-    logging.info('Training Images D1: %s' %str(imtr.shape)) # expected: [num_slices, img_size_x, img_size_y]
-    logging.info('Training Labels D1: %s' %str(gttr.shape)) # expected: [num_slices, img_size_x, img_size_y]
-    logging.info('Validation Images D1: %s' %str(imvl.shape))
-    logging.info('Validation Labels D1: %s' %str(gtvl.shape))
+    logging.info('Training Images: %s' %str(imtr.shape)) # expected: [num_slices, img_size_x, img_size_y]
+    logging.info('Training Labels: %s' %str(gttr.shape)) # expected: [num_slices, img_size_x, img_size_y]
+    logging.info('Validation Images: %s' %str(imvl.shape))
+    logging.info('Validation Labels: %s' %str(gtvl.shape))
     logging.info('============================================================')
                 
     # ================================================================
@@ -198,7 +198,7 @@ def run_training(continue_run):
         # ================================================================
         images_normalized, _ = model.normalize(images_pl,
                                                exp_config,
-                                               training_pl)     
+                                               training_pl)
 
         # ================================================================
         # build the graph that computes predictions from the inference model
@@ -208,7 +208,7 @@ def run_training(continue_run):
                                          training_pl = training_pl)
         
         print('shape of inputs: ', images_pl.shape) # (batch_size, 256, 256, 1)
-        print('shape of logits: ', logits.shape) # (batch_size, 256, 256, 15)
+        print('shape of logits: ', logits.shape) # (batch_size, 256, 256, nlabels)
         
         # ================================================================
         # create a list of all vars that must be optimized wrt

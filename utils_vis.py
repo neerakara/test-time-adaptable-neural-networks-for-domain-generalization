@@ -1,51 +1,108 @@
+# ===============================================================
+# visualization functions
+# ===============================================================
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt 
 import numpy as np
 
-# ===============================================================
-# visualization function
-# ===============================================================
-def save_sample_results1(x,
-                         y,
-                         gt,
-                         savepath):
+# ==========================================================
+# ==========================================================
+def add_1_pixel_each_class(arr):
+    arr_ = np.copy(arr)
+    for j in range(15):
+        arr_[0,j]=j
+    return arr_
+
+def save_samples_downsampled(y,
+                             savepath,
+                             add_pixel_each_label=True,
+                             cmap='tab20'):
+        
+    plt.figure(figsize=[20,10])
     
-    ids = [16, 48, 80, 112, 144, 176, 224]
+    for i in range(4):
     
-    y_ = np.copy(y)
+        for j in range(8):
+        
+            plt.subplot(4, 8, 8*i+j+1)
+            
+            if add_pixel_each_label:
+                labels_this_slice = add_1_pixel_each_class(y[8*i+j,:,:])
+            else:
+                labels_this_slice = y[8*i+j,:,:]
+                
+            plt.imshow(labels_this_slice, cmap=cmap)
+            plt.colorbar()
+
+    plt.savefig(savepath, bbox_inches='tight')
+    plt.close()
+    
+
+# ==========================================================
+# ==========================================================       
+def save_sample_prediction_results(x,
+                                   x_norm,
+                                   y_pred,
+                                   gt,
+                                   num_rotations,
+                                   savepath):
+    
+    ids = np.arange(48, 256-48, (256-96)//8)
+    nc = len(ids)
+    nr = 5
+    
+    y_pred_ = np.copy(y_pred)
     gt_ = np.copy(gt)
     
     # add one pixel of each class to get consistent colors for each class in the visualization
     for i in range(15):
         for idx in ids:
-            y_[0,idx,i] = i
-            gt_[0,idx,i] = i
+            y_pred_[0,i,idx] = i
+            gt_[0,i,idx] = i
+            
+    # make a binary mask showing locations of incorrect predictions
+    incorrect_mask = np.zeros_like(gt_)
+    incorrect_mask[np.where(gt_ != y_pred_)] = 1
         
-    plt.figure(figsize=[3*3,3*len(ids)])
-    for i in range(len(ids)): 
-        plt.subplot(len(ids),3,3*i+1); plt.imshow(x[:,ids[i],:], cmap='gray'); plt.colorbar()
-        plt.subplot(len(ids),3,3*i+2); plt.imshow(y_[:,ids[i],:], cmap='tab20'); plt.colorbar(); plt.title('prediction')
-        plt.subplot(len(ids),3,3*i+3); plt.imshow(gt_[:,ids[i],:], cmap='tab20'); plt.colorbar(); plt.title('ground truth')
-    plt.savefig(savepath)
+    plt.figure(figsize=[3*nc, 3*nr])
+    
+    for c in range(nc): 
+        
+        x_vis = np.rot90(x[:, :, ids[c]], k=num_rotations)
+        x_norm_vis = np.rot90(x_norm[:, :, ids[c]], k=num_rotations)
+        y_pred_vis = np.rot90(y_pred_[:, :, ids[c]], k=num_rotations)
+        gt_vis = np.rot90(gt_[:, :, ids[c]], k=num_rotations)
+        incorrect_mask_vis = np.rot90(incorrect_mask[:, :, ids[c]], k=num_rotations)
+        
+        plt.subplot(nr, nc, nc*0 + c + 1); plt.imshow(x_vis, cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('Image')
+        plt.subplot(nr, nc, nc*1 + c + 1); plt.imshow(x_norm_vis, cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('Normalized')
+        plt.subplot(nr, nc, nc*2 + c + 1); plt.imshow(y_pred_vis, cmap='tab20'); plt.colorbar(); plt.title('Prediction')
+        plt.subplot(nr, nc, nc*3 + c + 1); plt.imshow(gt_vis, cmap='tab20'); plt.colorbar(); plt.title('Ground Truth')
+        plt.subplot(nr, nc, nc*4 + c + 1); plt.imshow(incorrect_mask_vis, cmap='tab20'); plt.colorbar(); plt.title('Incorrect pixels')
+        
+    plt.savefig(savepath, bbox_inches='tight')
     plt.close()
     
-    
+# ==========================================================
+# ==========================================================       
 def save_sample_results(x,
                         x_norm,
                         x_diff,
                         y,
                         y_masked,
                         y_pred_cae,
+                        at,
                         gt,
                         x2xnorm2y2xnormhat,
                         x2xnorm2y2xnormhat_minusdeltax,
                         savepath):
     
-    ids = [1, 3, 5, 7, 9, 11, 13]
+    ids = np.arange(0, x.shape[0], x.shape[0] // 8)
     
     y_ = np.copy(y)
     gt_ = np.copy(gt)
+    at_ = np.copy(at)
     y_masked_ = np.copy(y_masked)
     y_pred_cae_ = np.copy(y_pred_cae)
     
@@ -54,10 +111,11 @@ def save_sample_results(x,
         for idx in ids:
             y_[idx,0,i] = i
             gt_[idx,0,i] = i
+            at_[idx,0,i] = i
             y_masked_[idx,0,i] = i
             y_pred_cae_[idx,0,i] = i
-        
-    nc = 9
+    
+    nc = 10
     plt.figure(figsize=[nc*3, 3*len(ids)])
     for i in range(len(ids)): 
         plt.subplot(len(ids), nc, nc*i+1); plt.imshow(x[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('test image')
@@ -66,10 +124,12 @@ def save_sample_results(x,
         plt.subplot(len(ids), nc, nc*i+4); plt.imshow(y_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('pred')
         plt.subplot(len(ids), nc, nc*i+5); plt.imshow(y_masked_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('pred masked')
         plt.subplot(len(ids), nc, nc*i+6); plt.imshow(y_pred_cae_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('pred masked autoencoded')
-        plt.subplot(len(ids), nc, nc*i+7); plt.imshow(gt_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('ground truth')
-        plt.subplot(len(ids), nc, nc*i+8); plt.imshow(x2xnorm2y2xnormhat[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('label2image')
-        plt.subplot(len(ids), nc, nc*i+9); plt.imshow(x2xnorm2y2xnormhat_minusdeltax[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('label2image - deltax')
-    plt.savefig(savepath)
+        plt.subplot(len(ids), nc, nc*i+7); plt.imshow(at_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('atlas')
+        plt.subplot(len(ids), nc, nc*i+8); plt.imshow(gt_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('ground truth')
+        plt.subplot(len(ids), nc, nc*i+9); plt.imshow(x2xnorm2y2xnormhat[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('label2image')
+        plt.subplot(len(ids), nc, nc*i+10); plt.imshow(x2xnorm2y2xnormhat_minusdeltax[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('label2image - deltax')
+    
+    plt.savefig(savepath, bbox_inches='tight')
     plt.close()
     
 def plot_graph(a, b, save_path):

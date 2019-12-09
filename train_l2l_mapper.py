@@ -65,7 +65,7 @@ def run_training(continue_run):
 
     # ============================
     # Load data
-    # ============================   
+    # ============================
     logging.info('============================================================')
     logging.info('Loading data...')
     if exp_config.train_dataset is 'HCPT1':
@@ -427,7 +427,9 @@ def do_eval(sess,
     dice_ii = 0
     num_batches = 0
 
-    for batch in iterate_minibatches(labels, batch_size):
+    for batch in iterate_minibatches(labels,
+                                     batch_size,
+                                     train_or_eval = 'eval'):
 
         true_labels_eval, blank_masks_eval, wrong_labels_eval = batch
 
@@ -455,7 +457,8 @@ def do_eval(sess,
 # ==================================================================
 # ==================================================================
 def iterate_minibatches(labels,
-                        batch_size):
+                        batch_size,
+                        train_or_eval = 'train'):
 
     # ===========================
     # generate indices to randomly select subjects in each minibatch
@@ -476,18 +479,20 @@ def iterate_minibatches(labels,
         labels_this_batch = labels[batch_indices, ...]
         
         # ===========================    
-        # data augmentation (random elastic transformations)
-        # ===========================      
-        labels_this_batch = do_data_augmentation(labels = labels_this_batch,
-                                                 data_aug_ratio = exp_config.da_ratio,
-                                                 sigma = exp_config.sigma,
-                                                 alpha = exp_config.alpha,
-                                                 trans_min = exp_config.trans_min,
-                                                 trans_max = exp_config.trans_max,
-                                                 rot_min = exp_config.rot_min,
-                                                 rot_max = exp_config.rot_max,
-                                                 scale_min = exp_config.scale_min,
-                                                 scale_max = exp_config.scale_max)
+        # data augmentation (random elastic transformations, translations, rotations, scaling)
+        # doing data aug both during training as well as during evaluation on the validation set (used for model selection)
+        # ===========================                  
+        if train_or_eval is 'train' or train_or_eval is 'eval':
+            labels_this_batch = do_data_augmentation(labels = labels_this_batch,
+                                                     data_aug_ratio = exp_config.da_ratio,
+                                                     sigma = exp_config.sigma,
+                                                     alpha = exp_config.alpha,
+                                                     trans_min = exp_config.trans_min,
+                                                     trans_max = exp_config.trans_max,
+                                                     rot_min = exp_config.rot_min,
+                                                     rot_max = exp_config.rot_max,
+                                                     scale_min = exp_config.scale_min,
+                                                     scale_max = exp_config.scale_max)
         
         # ==================    
         # make labels 1-hot
@@ -497,11 +502,22 @@ def iterate_minibatches(labels,
         # ===========================      
         # make noise masks that the autoencoder with try to denoise
         # ===========================      
-        blank_masks_this_batch, wrong_labels_this_batch = utils_masks.make_noise_masks_3d(shape = [exp_config.batch_size] + list(exp_config.image_size) + [exp_config.nlabels],
-                                                                                          mask_type = exp_config.mask_type,
-                                                                                          mask_params = [exp_config.mask_radius, exp_config.num_squares],
-                                                                                          nlabels = exp_config.nlabels,
-                                                                                          labels_1hot = labels_this_batch_1hot)
+        if train_or_eval is 'train':
+            blank_masks_this_batch, wrong_labels_this_batch = utils_masks.make_noise_masks_3d(shape = [exp_config.batch_size] + list(exp_config.image_size) + [exp_config.nlabels],
+                                                                                              mask_type = exp_config.mask_type,
+                                                                                              mask_params = [exp_config.mask_radius, exp_config.num_squares],
+                                                                                              nlabels = exp_config.nlabels,
+                                                                                              labels_1hot = labels_this_batch_1hot)
+            
+        elif train_or_eval is 'eval':
+            # fixing amount of noise in order to get comparable runs during evaluation
+            blank_masks_this_batch, wrong_labels_this_batch = utils_masks.make_noise_masks_3d(shape = [exp_config.batch_size] + list(exp_config.image_size) + [exp_config.nlabels],
+                                                                                              mask_type = exp_config.mask_type,
+                                                                                              mask_params = [exp_config.mask_radius, exp_config.num_squares],
+                                                                                              nlabels = exp_config.nlabels,
+                                                                                              labels_1hot = labels_this_batch_1hot,
+                                                                                              is_num_masks_fixed = True,
+                                                                                              is_size_masks_fixed = True)
 
         yield labels_this_batch, blank_masks_this_batch, wrong_labels_this_batch
         
@@ -576,7 +592,7 @@ def do_data_augmentation(labels,
             labels_[zz,:,:] = utils.crop_or_pad_slice_to_size(labels_i_tmp, n_x, n_y)
         
     return np.expand_dims(labels_, axis=0)
-        
+
 # ==================================================================
 # ==================================================================
 def main():

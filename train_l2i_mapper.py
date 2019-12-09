@@ -11,11 +11,10 @@ import model as model
 import config.system as sys_config
 import scipy.ndimage.interpolation
 from skimage import transform
-
-import data.data_hcp as data_hcp
-
 import utils
 import utils_masks
+
+import data.data_hcp as data_hcp
 
 # ==================================================================
 # Set the config file of the experiment you want to run here:
@@ -92,10 +91,10 @@ def run_training(continue_run):
         imvl, gtvl = [ data_brain_val['images'], data_brain_val['labels'] ]
 
         
-    logging.info('Training Images D1: %s' %str(imtr.shape)) # expected: [num_slices, img_size_x, img_size_y]
-    logging.info('Training Labels D1: %s' %str(gttr.shape)) # expected: [num_slices, img_size_x, img_size_y]
-    logging.info('Validation Images D1: %s' %str(imvl.shape))
-    logging.info('Validation Labels D1: %s' %str(gtvl.shape))
+    logging.info('Training Images: %s' %str(imtr.shape)) # expected: [num_slices, img_size_x, img_size_y]
+    logging.info('Training Labels: %s' %str(gttr.shape)) # expected: [num_slices, img_size_x, img_size_y]
+    logging.info('Validation Images: %s' %str(imvl.shape))
+    logging.info('Validation Labels: %s' %str(gtvl.shape))
     logging.info('============================================================')
                 
     # ================================================================
@@ -462,7 +461,7 @@ def iterate_minibatches(images,
         y = labels[batch_indices, ...]
         
         # ===========================    
-        # data augmentation (random elastic transformations)
+        # data augmentation: random elastic deformations, translations, rotations, scaling
         # ===========================      
         x, y = do_data_augmentation(images = x,
                                     labels = y,

@@ -185,28 +185,28 @@ def unet2D_l2l(inputs, nlabels, training_pl):
         conv5_2 = layers.conv2D_layer_bn(x=conv5_1, name='conv5_2', num_filters=n5, training=training_pl)
         
         # ====================================
-        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # Upsampling via bilinear upsampling, followed by 2 conv layers
         # ====================================
         upsample1 = layers.bilinear_upsample2D(conv5_2, size = (tf.shape(conv4_2)[1], tf.shape(conv4_2)[2]), name='upsample1')
         conv6_1 = layers.conv2D_layer_bn(x=upsample1, name='conv6_1', num_filters=n4, training=training_pl)
         conv6_2 = layers.conv2D_layer_bn(x=conv6_1, name='conv6_2', num_filters=n4, training=training_pl)
         
         # ====================================
-        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # Upsampling via bilinear upsampling, followed by 2 conv layers
         # ====================================
         upsample2 = layers.bilinear_upsample2D(conv6_2, size = (tf.shape(conv3_2)[1], tf.shape(conv3_2)[2]), name='upsample2')    
         conv7_1 = layers.conv2D_layer_bn(x=upsample2, name='conv7_1', num_filters=n3, training=training_pl)
         conv7_2 = layers.conv2D_layer_bn(x=conv7_1, name='conv7_2', num_filters=n3, training=training_pl)
         
         # ====================================
-        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # Upsampling via bilinear upsampling, followed by 2 conv layers
         # ====================================
         upsample3 = layers.bilinear_upsample2D(conv7_2, size = (tf.shape(conv2_2)[1], tf.shape(conv2_2)[2]), name='upsample3')    
         conv8_1 = layers.conv2D_layer_bn(x=upsample3, name='conv8_1', num_filters=n2, training=training_pl)
         conv8_2 = layers.conv2D_layer_bn(x=conv8_1, name='conv8_2', num_filters=n2, training=training_pl)
         
         # ====================================
-        # Upsampling via bilinear upsampling, concatenation (skip connection), followed by 2 conv layers
+        # Upsampling via bilinear upsampling, followed by 2 conv layers
         # ====================================
         upsample4 = layers.bilinear_upsample2D(conv8_2, size = (tf.shape(conv1_2)[1], tf.shape(conv1_2)[2]), name='upsample4')  
         conv9_1 = layers.conv2D_layer_bn(x=upsample4, name='conv9_1', num_filters=n1, training=training_pl)

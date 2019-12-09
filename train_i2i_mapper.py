@@ -6,9 +6,6 @@ import os.path
 import shutil
 import tensorflow as tf
 import numpy as np
-import utils
-import utils_masks
-import utils_vis
 import gc
 import model as model
 import config.system as sys_config
@@ -17,13 +14,17 @@ import skimage.measure as met_images
 from skimage.transform import rescale
 from tfwrapper import losses, layers
 
+import utils
+import utils_masks
+import utils_vis
+
 import data.data_hcp as data_hcp
 import data.data_abide as data_abide
 
 # ==================================================================
 # Set the config file of the experiment you want to run here:
 # ==================================================================
-from experiments import i2inorm as exp_config
+from experiments import i2i as exp_config
     
 # ==================================================================
 # main function for training
@@ -92,7 +93,6 @@ def run_training(log_dir,
         # ================================================================
         # create placeholders - segmentation net
         # ================================================================
-        # images_pl = tf.placeholder(tf.float32, shape = [None] + list(exp_config.image_size) + [1], name = 'images')        
         images_pl = tf.placeholder(tf.float32, shape = [exp_config.batch_size] + list(exp_config.image_size) + [1], name = 'images')        
         learning_rate_pl = tf.placeholder(tf.float32, shape=[], name = 'learning_rate')
         training_pl = tf.placeholder(tf.bool, shape=[], name = 'training_or_testing')
@@ -156,7 +156,7 @@ def run_training(log_dir,
             var_name = v.name        
             if 'image_normalizer' in var_name:
                 normalization_vars.append(v)
-                i2l_vars.append(v)
+                i2l_vars.append(v) # the normalization vars also need to be restored from the pre-trained i2l mapper
             elif 'i2l_mapper' in var_name:
                 i2l_vars.append(v)
             elif 'l2i_mapper' in var_name:
@@ -215,7 +215,9 @@ def run_training(log_dir,
         #   - we want to compute the loss only in this region
         #   - there is no way (the rest of the image can be predicted from the labels)
         # ================================================================
-        roi_mask_pl = tf.placeholder(tf.float32, shape = [exp_config.batch_size] + list(exp_config.image_size) + [1], name = 'roi_mask')
+        roi_mask_pl = tf.placeholder(tf.float32,
+                                     shape = [exp_config.batch_size] + list(exp_config.image_size) + [1],
+                                     name = 'roi_mask')
         
         images_pl_roi = tf.math.multiply(images_pl, roi_mask_pl)            
         predicted_images_from_predicted_seg_roi = tf.math.multiply(predicted_images_from_predicted_seg, roi_mask_pl)
@@ -371,10 +373,10 @@ def run_training(log_dir,
             for v in uninit_variables: print(v)
 
         # ================================================================
-        # Restore the segmentation network parameters
+        # Restore the segmentation network parameters and the pre-trained i2i mapper parameters
         # ================================================================
         logging.info('============================================================')
-        path_to_model = sys_config.log_root + 'i2l_mapper/' + exp_config.expname_i2l + '/models/'
+        path_to_model = sys_config.log_root + 'i2i2l_mapper/' + exp_config.expname_i2l + '/models/'
         checkpoint_path = utils.get_latest_model_checkpoint_path(path_to_model, 'best_dice.ckpt')
         logging.info('Restoring the trained parameters from %s...' % checkpoint_path)
         saver_i2l.restore(sess, checkpoint_path)
@@ -411,9 +413,8 @@ def run_training(log_dir,
         # ================================================================
         step = init_step
         best_score = 0.0
-                
-        # for epoch in range(exp_config.max_epochs_normalizer):
-        while (step < exp_config.max_steps_normalizer):
+
+        while (step < exp_config.max_steps):
                                 
             # ================================================               
             # Ever few epochs, 
@@ -741,7 +742,7 @@ def main(argv):
         data_brain_test = data_hcp.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_hcp,
                                                                preprocessing_folder = sys_config.preproc_folder_hcp,
                                                                idx_start = 50,
-                                                               idx_end = 60, # let's run exps on only 10 test subjects for now     
+                                                               idx_end = 70,
                                                                protocol = 'T2',
                                                                size = exp_config.image_size,
                                                                depth = image_depth,
@@ -759,7 +760,7 @@ def main(argv):
                                                                  preprocessing_folder = sys_config.preproc_folder_abide,
                                                                  site_name = 'CALTECH',
                                                                  idx_start = 16,
-                                                                 idx_end = 26, # let's run exps on only 10 test subjects for now
+                                                                 idx_end = 36,
                                                                  protocol = 'T1',
                                                                  size = exp_config.image_size,
                                                                  depth = image_depth,
@@ -778,7 +779,7 @@ def main(argv):
                                                                  preprocessing_folder = sys_config.preproc_folder_abide,
                                                                  site_name = 'STANFORD',
                                                                  idx_start = 16,
-                                                                 idx_end = 26, # let's run exps on only 10 test subjects for now
+                                                                 idx_end = 36,
                                                                  protocol = 'T1',
                                                                  size = exp_config.image_size,
                                                                  depth = image_depth,
@@ -805,7 +806,6 @@ def main(argv):
     # ================================================================
     # run the training for each test image
     # ================================================================
-    # for subject_id in range(5):
     subject_num = int(argv[0])
     for subject_id in range(subject_num, subject_num+1):
         

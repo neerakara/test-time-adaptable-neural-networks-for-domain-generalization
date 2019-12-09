@@ -319,16 +319,6 @@ def elastic_transform_label_3d(label, # 3d
 
 # ===============================================================
 # ===============================================================
-#def make_onehot(a):
-#    # taken from https://stackoverflow.com/questions/36960320/convert-a-2d-matrix-to-a-3d-one-hot-matrix-numpy/36960495
-#    ncols = a.max()+1
-#    out = np.zeros((a.size,ncols), dtype=np.uint8)
-#    out[np.arange(a.size),a.ravel()] = 1
-#    out.shape = a.shape + (ncols,)
-#    return out
-
-# ===============================================================
-# ===============================================================
 def make_onehot(arr, nlabels):
 
     # taken from https://stackoverflow.com/questions/36960320/convert-a-2d-matrix-to-a-3d-one-hot-matrix-numpy/36960495
