@@ -297,7 +297,8 @@ def run_training(continue_run):
             # ================================================            
             for batch in iterate_minibatches(imtr,
                                              gttr,
-                                             batch_size = exp_config.batch_size):
+                                             batch_size = exp_config.batch_size,
+                                             train_or_eval = 'train'):
                 
                 curr_lr = exp_config.learning_rate
                 start_time = time.time()
@@ -413,7 +414,10 @@ def do_eval(sess,
     loss_ii = 0
     num_batches = 0
     
-    for batch in iterate_minibatches(images, labels, batch_size):
+    for batch in iterate_minibatches(images,
+                                     labels,
+                                     batch_size,
+                                     train_or_eval = 'eval'):
 
         x, y, roi = batch
 
@@ -440,7 +444,8 @@ def do_eval(sess,
 # ==================================================================
 def iterate_minibatches(images,
                         labels,
-                        batch_size):
+                        batch_size,
+                        train_or_eval = 'train'):
 
     # ===========================
     # generate indices to randomly select subjects in each minibatch
@@ -462,18 +467,20 @@ def iterate_minibatches(images,
         
         # ===========================    
         # data augmentation: random elastic deformations, translations, rotations, scaling
-        # ===========================      
-        x, y = do_data_augmentation(images = x,
-                                    labels = y,
-                                    data_aug_ratio = exp_config.da_ratio,
-                                    sigma = exp_config.sigma,
-                                    alpha = exp_config.alpha,
-                                    trans_min = exp_config.trans_min,
-                                    trans_max = exp_config.trans_max,
-                                    rot_min = exp_config.rot_min,
-                                    rot_max = exp_config.rot_max,
-                                    scale_min = exp_config.scale_min,
-                                    scale_max = exp_config.scale_max)  
+        # ===========================    
+        if train_or_eval is 'train' or train_or_eval is 'eval':
+        # if train_or_eval is 'train':
+            x, y = do_data_augmentation(images = x,
+                                        labels = y,
+                                        data_aug_ratio = exp_config.da_ratio,
+                                        sigma = exp_config.sigma,
+                                        alpha = exp_config.alpha,
+                                        trans_min = exp_config.trans_min,
+                                        trans_max = exp_config.trans_max,
+                                        rot_min = exp_config.rot_min,
+                                        rot_max = exp_config.rot_max,
+                                        scale_min = exp_config.scale_min,
+                                        scale_max = exp_config.scale_max)  
         
         # ===========================      
         # make a roi mask around the labels - the loss will be computed only within this.
