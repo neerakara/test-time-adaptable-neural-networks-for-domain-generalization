@@ -9,7 +9,7 @@ train_dataset = 'HCPT1'
 tr_str = 'tr' + train_dataset
 
 # run number
-run_number = 1
+run_number = 3
 run_str = '_run' + str(run_number)
 
 # training loss
@@ -43,7 +43,7 @@ nlabels = 15
 # ======================================================================
 # training settings
 # ======================================================================
-max_steps = 20000
+max_steps = 20001
 batch_size = 16
 learning_rate = 1e-3    
 optimizer_handle = tf.train.AdamOptimizer
