@@ -96,9 +96,9 @@ def run_training(continue_run):
     logging.info('============================================================')
     
     # visualize downsampled volumes
-    for subject_num in range(gttr.shape[0]):
-        utils_vis.save_samples_downsampled(gttr[subject_num, ::2, :, :],
-                                       savepath = log_dir + '/training_image_' + str(subject_num+1) + '.png')
+#    for subject_num in range(gttr.shape[0]):
+#        utils_vis.save_samples_downsampled(gttr[subject_num, ::2, :, :],
+#                                       savepath = log_dir + '/training_image_' + str(subject_num+1) + '.png')
                 
     # ================================================================
     # build the TF graph
@@ -190,7 +190,7 @@ def run_training(continue_run):
         train_op = model.training_step(loss_op,
                                        l2l_vars,
                                        exp_config.optimizer_handle,
-                                       exp_config.learning_rate,
+                                       exp_config.learning_rate_l2l,
                                        update_bn_nontrainable_vars=True)
 
         # ================================================================
@@ -300,7 +300,7 @@ def run_training(continue_run):
         # ================================================================
         # run training epochs
         # ================================================================
-        while (step < exp_config.max_steps):
+        while (step < exp_config.max_steps_l2l):
 
             if step % 1000 is 0:
                 logging.info('============================================================')
@@ -378,6 +378,18 @@ def run_training(continue_run):
                 if step % exp_config.save_frequency == 0:
                     checkpoint_file = os.path.join(log_dir, 'models/model.ckpt')
                     saver.save(sess, checkpoint_file, global_step=step)
+                    
+                    # at some frequency, visualize the noisy and clean segmentation pairs used for training the DAE
+                    noisy_labels = sess.run(noisy_labels_1hot, feed_dict = {true_labels_pl: true_labels,
+                                                                            blank_masks_pl: blank_masks,   
+                                                                            wrong_labels_pl: wrong_labels})
+                    noisy_labels = np.argmax(noisy_labels, axis=-1)
+                    
+                    basepath = log_dir + '/training_data/iter' + str(step)
+                    for zz in np.arange(20, 50, 10):
+                        utils_vis.save_single_image(true_labels[0, zz, :, :], basepath + '_slice' + str(zz) + '_clean.png', 15, True, 'tab20', False)
+                        utils_vis.save_single_image(noisy_labels[0, zz, :, :], basepath + '_slice' + str(zz) + '_noisy.png', 15, True, 'tab20', False)
+                    
 
                 # ===========================
                 # Evaluate the model periodically on a validation set 
@@ -483,6 +495,7 @@ def iterate_minibatches(labels,
         # doing data aug both during training as well as during evaluation on the validation set (used for model selection)
         # ===========================                  
         if train_or_eval is 'train' or train_or_eval is 'eval':
+        # if train_or_eval is 'train':
             labels_this_batch = do_data_augmentation(labels = labels_this_batch,
                                                      data_aug_ratio = exp_config.da_ratio,
                                                      sigma = exp_config.sigma,
@@ -568,10 +581,10 @@ def do_data_augmentation(labels,
         
         for zz in range(labels_.shape[0]):
             labels_[zz,:,:] = scipy.ndimage.interpolation.rotate(labels_[zz,:,:],
-                                                            reshape = False,
-                                                            angle = random_angle,
-                                                            axes = (1, 0),
-                                                            order = 0)
+                                                                 reshape = False,
+                                                                 angle = random_angle,
+                                                                 axes = (1, 0),
+                                                                 order = 0)
             
     # ========
     # scaling
@@ -604,6 +617,7 @@ def main():
     if not tf.gfile.Exists(log_dir):
         tf.gfile.MakeDirs(log_dir)
         tf.gfile.MakeDirs(log_dir + '/models')
+        tf.gfile.MakeDirs(log_dir + '/training_data')
         continue_run = False
 
     # ===========================
