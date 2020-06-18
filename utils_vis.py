@@ -8,12 +8,40 @@ import numpy as np
 
 # ==========================================================
 # ==========================================================
-def add_1_pixel_each_class(arr):
+def add_1_pixel_each_class(arr, nlabels=15):
+    
     arr_ = np.copy(arr)
-    for j in range(15):
+    for j in range(nlabels):
         arr_[0,j]=j
+    
     return arr_
 
+# ==========================================================
+# ==========================================================
+def save_single_image(image,
+                      savepath,
+                      nlabels,
+                      add_pixel_each_label=True,
+                      cmap='tab20',
+                      colorbar=False,
+                      climits = []):
+        
+    plt.figure(figsize=[20,20])            
+    
+    if add_pixel_each_label:
+        image = add_1_pixel_each_class(image, nlabels)
+                
+    plt.imshow(image, cmap=cmap)
+    if climits != []:
+        plt.clim([climits[0], climits[1]])
+    plt.axis('off')
+    if colorbar:
+        plt.colorbar()
+    plt.savefig(savepath, bbox_inches='tight', dpi=50)
+    plt.close()
+
+# ==========================================================
+# ==========================================================
 def save_samples_downsampled(y,
                              savepath,
                              add_pixel_each_label=True,
@@ -76,7 +104,7 @@ def save_sample_prediction_results(x,
         incorrect_mask_vis = np.rot90(incorrect_mask[:, :, ids[c]], k=num_rotations)
         
         plt.subplot(nr, nc, nc*0 + c + 1); plt.imshow(x_vis, cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('Image')
-        plt.subplot(nr, nc, nc*1 + c + 1); plt.imshow(x_norm_vis, cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('Normalized')
+        plt.subplot(nr, nc, nc*1 + c + 1); plt.imshow(x_norm_vis, cmap='gray'); plt.colorbar(); plt.title('Normalized')
         plt.subplot(nr, nc, nc*2 + c + 1); plt.imshow(y_pred_vis, cmap='tab20'); plt.colorbar(); plt.title('Prediction')
         plt.subplot(nr, nc, nc*3 + c + 1); plt.imshow(gt_vis, cmap='tab20'); plt.colorbar(); plt.title('Ground Truth')
         plt.subplot(nr, nc, nc*4 + c + 1); plt.imshow(incorrect_mask_vis, cmap='tab20'); plt.colorbar(); plt.title('Incorrect pixels')
@@ -90,12 +118,9 @@ def save_sample_results(x,
                         x_norm,
                         x_diff,
                         y,
-                        y_masked,
-                        y_pred_cae,
+                        y_pred_dae,
                         at,
                         gt,
-                        x2xnorm2y2xnormhat,
-                        x2xnorm2y2xnormhat_minusdeltax,
                         savepath):
     
     ids = np.arange(0, x.shape[0], x.shape[0] // 8)
@@ -103,8 +128,7 @@ def save_sample_results(x,
     y_ = np.copy(y)
     gt_ = np.copy(gt)
     at_ = np.copy(at)
-    y_masked_ = np.copy(y_masked)
-    y_pred_cae_ = np.copy(y_pred_cae)
+    y_pred_dae_ = np.copy(y_pred_dae)
     
     # add one pixel of each class to get consistent colors for each class in the visualization
     for i in range(15):
@@ -112,22 +136,18 @@ def save_sample_results(x,
             y_[idx,0,i] = i
             gt_[idx,0,i] = i
             at_[idx,0,i] = i
-            y_masked_[idx,0,i] = i
-            y_pred_cae_[idx,0,i] = i
+            y_pred_dae_[idx,0,i] = i
     
-    nc = 10
+    nc = 7
     plt.figure(figsize=[nc*3, 3*len(ids)])
     for i in range(len(ids)): 
         plt.subplot(len(ids), nc, nc*i+1); plt.imshow(x[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('test image')
-        plt.subplot(len(ids), nc, nc*i+2); plt.imshow(x_norm[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('normalized image')
-        plt.subplot(len(ids), nc, nc*i+3); plt.imshow(x_diff[ids[i],:,:], cmap='gray'); plt.clim([-1.1,1.1]); plt.colorbar(); plt.title('diff')
+        plt.subplot(len(ids), nc, nc*i+2); plt.imshow(x_norm[ids[i],:,:], cmap='gray'); plt.colorbar(); plt.title('normalized image')
+        plt.subplot(len(ids), nc, nc*i+3); plt.imshow(x_diff[ids[i],:,:], cmap='gray'); plt.colorbar(); plt.title('diff')
         plt.subplot(len(ids), nc, nc*i+4); plt.imshow(y_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('pred')
-        plt.subplot(len(ids), nc, nc*i+5); plt.imshow(y_masked_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('pred masked')
-        plt.subplot(len(ids), nc, nc*i+6); plt.imshow(y_pred_cae_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('pred masked autoencoded')
-        plt.subplot(len(ids), nc, nc*i+7); plt.imshow(at_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('atlas')
-        plt.subplot(len(ids), nc, nc*i+8); plt.imshow(gt_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('ground truth')
-        plt.subplot(len(ids), nc, nc*i+9); plt.imshow(x2xnorm2y2xnormhat[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('label2image')
-        plt.subplot(len(ids), nc, nc*i+10); plt.imshow(x2xnorm2y2xnormhat_minusdeltax[ids[i],:,:], cmap='gray'); plt.clim([0,1.1]); plt.colorbar(); plt.title('label2image - deltax')
+        plt.subplot(len(ids), nc, nc*i+5); plt.imshow(y_pred_dae_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('pred denoised')
+        plt.subplot(len(ids), nc, nc*i+6); plt.imshow(at_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('atlas')
+        plt.subplot(len(ids), nc, nc*i+7); plt.imshow(gt_[ids[i],:,:], cmap='tab20'); plt.colorbar(); plt.title('ground truth')
     
     plt.savefig(savepath, bbox_inches='tight')
     plt.close()
