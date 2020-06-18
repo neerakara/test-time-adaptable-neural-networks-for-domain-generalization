@@ -14,6 +14,7 @@ import scipy.ndimage.interpolation
 from skimage import transform
 
 import data.data_hcp as data_hcp
+import data.data_ixi as data_ixi
 import data.data_abide as data_abide
 
 # ==================================================================
@@ -73,7 +74,7 @@ def run_training(continue_run):
         data_brain_train = data_hcp.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_hcp,
                                                                 preprocessing_folder = sys_config.preproc_folder_hcp,
                                                                 idx_start = 0,
-                                                                idx_end = 20,             
+                                                                idx_end = 1040,             
                                                                 protocol = 'T1',
                                                                 size = exp_config.image_size,
                                                                 depth = exp_config.image_depth_hcp,
@@ -162,7 +163,29 @@ def run_training(continue_run):
                                                                 depth = exp_config.image_depth_stanford,
                                                                 target_resolution = exp_config.target_resolution_brain)
         imvl, gtvl = [ data_brain_val['images'], data_brain_val['labels'] ]
-
+        
+    elif exp_config.train_dataset is 'IXI':
+        logging.info('Reading IXI images...')    
+        logging.info('Data root directory: ' + sys_config.orig_data_root_ixi)      
+        data_brain_train = data_ixi.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_ixi,
+                                                                preprocessing_folder = sys_config.preproc_folder_ixi,
+                                                                idx_start = 0,
+                                                                idx_end = 12,             
+                                                                protocol = 'T2',
+                                                                size = exp_config.image_size,
+                                                                depth = exp_config.image_depth_ixi,
+                                                                target_resolution = exp_config.target_resolution_brain)
+        imtr, gttr = [ data_brain_train['images'], data_brain_train['labels'] ]
+        
+        data_brain_val = data_ixi.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_ixi,
+                                                              preprocessing_folder = sys_config.preproc_folder_ixi,
+                                                              idx_start = 12,
+                                                              idx_end = 17,             
+                                                              protocol = 'T2',
+                                                              size = exp_config.image_size,
+                                                              depth = exp_config.image_depth_ixi,
+                                                              target_resolution = exp_config.target_resolution_brain)
+        imvl, gtvl = [ data_brain_val['images'], data_brain_val['labels'] ]
         
     logging.info('Training Images: %s' %str(imtr.shape)) # expected: [num_slices, img_size_x, img_size_y]
     logging.info('Training Labels: %s' %str(gttr.shape)) # expected: [num_slices, img_size_x, img_size_y]
@@ -535,6 +558,7 @@ def iterate_minibatches(images,
             # doing data aug both during training as well as during evaluation on the validation set (used for model selection)
             # ===========================                  
             if train_or_eval is 'train' or train_or_eval is 'eval':
+            # if train_or_eval is 'train':
                 x, y = do_data_augmentation(images = x,
                                             labels = y,
                                             data_aug_ratio = exp_config.da_ratio,
