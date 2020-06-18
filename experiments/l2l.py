@@ -10,11 +10,11 @@ train_dataset = 'HCPT1'
 tr_str = 'tr' + train_dataset
 
 # run number
-run_number = 1
+run_number = 4
 run_str = '_run' + str(run_number)
 
 # data aug settings
-da_ratio = 0.25
+da_ratio = 0.0
 sigma = 20
 alpha = 1000
 trans_min = -10
@@ -29,17 +29,19 @@ res_str = '/res2.8_0.7_0.7_64_256_256'
 model_str = '/unet3D_n4_l2l_with_skip_connections_except_first_layer'
 model_handle_l2l = model_zoo.unet3D_n4_l2l_with_skip_connections_except_first_layer
 
+# ================================
+# settings for noise type: permuted squares
+# ================================
 # mask settings
 mask_type = 'squares_jigsaw' # zeros / random_labels / jigsaw
 mask_radius = 10 # The mask will be a square with side length twice this number 
 num_squares = 200
 is_num_masks_fixed = False
 is_size_masks_fixed = False
-mask_str = '_mask_' + mask_type + '_maxlen' + str(2*mask_radius) + 'x' + str(num_squares)
+noise_str = '_mask_' + mask_type + '_maxlen' + str(2*mask_radius) + 'x' + str(num_squares)
 
-experiment_name_l2l = 'l2l_mapper/' + tr_str + da_str + res_str + model_str + mask_str + run_str
-
-loss_type_l2l = 'dice' # crossentropy / dice
+experiment_name_l2l = 'l2l_mapper/' + tr_str + da_str + res_str + model_str + noise_str + run_str
+loss_type_l2l = 'dice'
 
 # ======================================================================
 # data settings
@@ -53,13 +55,14 @@ nlabels = 15
 # ======================================================================
 # training settings
 # ======================================================================
-max_steps = 50000
+max_steps_l2l = 30001
 batch_size = 1
-learning_rate = 1e-3
+learning_rate_l2l = 1e-3
 optimizer_handle = tf.train.AdamOptimizer
 summary_writing_frequency = 100
 train_eval_frequency = 1000
 val_eval_frequency = 1000
-save_frequency = 1000
+save_frequency = 10
+# visualize_training_data_frequency = 5
 continue_run = False
 debug = False
