@@ -66,8 +66,7 @@ def predict_segmentation(subject_name,
             i2l_vars.append(v)
             if 'image_normalizer' in var_name:
                 normalization_vars.append(v)
-                
-                
+                                
         # ================================================================
         # add init ops
         # ================================================================
@@ -98,7 +97,7 @@ def predict_segmentation(subject_name,
         # Restore the segmentation network parameters
         # ================================================================
         logging.info('============================================================')        
-        path_to_model = sys_config.log_root + 'i2i2l_mapper/' + exp_config.expname_i2l + '/models/'
+        path_to_model = sys_config.log_root + 'i2l_mapper/' + exp_config.expname_i2l + '/models/'
         checkpoint_path = utils.get_latest_model_checkpoint_path(path_to_model, 'best_dice.ckpt')
         logging.info('Restoring the trained parameters from %s...' % checkpoint_path)
         saver_i2l.restore(sess, checkpoint_path)
@@ -253,6 +252,23 @@ def main():
                                                                  depth = image_depth,
                                                                  target_resolution = exp_config.target_resolution_brain)
         
+    elif test_dataset_name is 'IXI':
+        logging.info('Reading IXI images...')    
+        logging.info('Data root directory: ' + sys_config.orig_data_root_ixi)
+        
+        image_depth = exp_config.image_depth_ixi
+        idx_start = 17
+        idx_end = 37         
+        
+        data_brain_test = data_ixi.load_and_maybe_process_data(input_folder = sys_config.orig_data_root_ixi,
+                                                              preprocessing_folder = sys_config.preproc_folder_ixi,
+                                                              idx_start = idx_start,
+                                                              idx_end = idx_end,             
+                                                              protocol = 'T2',
+                                                              size = exp_config.image_size,
+                                                              depth = image_depth,
+                                                              target_resolution = exp_config.target_resolution_brain)
+        
     imts = data_brain_test['images']
     name_test_subjects = data_brain_test['patnames']
     num_test_subjects = imts.shape[0] // image_depth
@@ -271,7 +287,7 @@ def main():
     if exp_config.normalize is True:
         log_dir = os.path.join(sys_config.log_root, exp_config.expname_normalizer)
     else:
-        log_dir = sys_config.log_root + 'i2i2l_mapper/' + exp_config.expname_i2l
+        log_dir = sys_config.log_root + 'i2l_mapper/' + exp_config.expname_i2l
 
     # ================================   
     # open a text file for writing the mean dice scores for each subject that is evaluated
