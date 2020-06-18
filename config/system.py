@@ -25,6 +25,7 @@ project_data_root = os.path.join(project_root, 'data/')
 orig_data_root_hcp = os.path.join(bmic_data_root,'HCP/3T_Structurals_Preprocessed/')
 orig_data_root_abide = '/usr/bmicnas01/data-biwi-01/nkarani/projects/generative_segmentation/data/preproc_data/abide/'
 orig_data_root_pfizer = '/usr/bmicnas01/data-biwi-01/bmicdatasets-originals/Originals/PfizerData/'
+orig_data_root_ixi = '/usr/bmicnas01/data-biwi-01/nkarani/projects/generative_segmentation/data/preproc_data/ixi/'
 
 # ==================================================================
 # dirs where the pre-processed data is stored
@@ -32,8 +33,9 @@ orig_data_root_pfizer = '/usr/bmicnas01/data-biwi-01/bmicdatasets-originals/Orig
 preproc_folder_hcp = os.path.join(project_data_root,'preproc_data/hcp/')
 preproc_folder_abide = os.path.join(project_data_root,'preproc_data/abide/')
 preproc_folder_pfizer = os.path.join(project_data_root,'preproc_data/pfizer/')
+preproc_folder_ixi = os.path.join(project_data_root,'preproc_data/ixi/')
 
 # ==================================================================
 # log root
 # ==================================================================
-log_root = os.path.join(project_code_root, 'brain/v10/logdir/')
+log_root = os.path.join(project_code_root, 'brain/v2.0/logdir/')
