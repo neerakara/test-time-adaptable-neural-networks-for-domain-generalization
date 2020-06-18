@@ -123,7 +123,8 @@ def training_step(loss,
                   var_list,
                   optimizer_handle,
                   learning_rate,
-                  update_bn_nontrainable_vars):
+                  update_bn_nontrainable_vars,
+                  return_optimizer = False):
     '''
     Creates the optimisation operation which is executed in each training iteration of the network
     :param loss: The loss to be minimised
@@ -133,13 +134,17 @@ def training_step(loss,
     :return: The training operation
     '''
 
-    train_op = optimizer_handle(learning_rate = learning_rate).minimize(loss, var_list=var_list)
+    optimizer = optimizer_handle(learning_rate = learning_rate) 
+    train_op = optimizer.minimize(loss, var_list=var_list)
     
     if update_bn_nontrainable_vars is True:
         opt_memory_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         train_op = tf.group([train_op, opt_memory_update_ops])
 
-    return train_op
+    if return_optimizer is True:
+        return train_op, optimizer
+    else:
+        return train_op
 
 # ================================================================
 # ================================================================
