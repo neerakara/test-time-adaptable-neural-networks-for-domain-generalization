@@ -317,6 +317,37 @@ def elastic_transform_label_3d(label, # 3d
     
     return distored_label
 
+# ==================================================================
+# taken from: https://gist.github.com/erniejunior/601cdf56d2b424757de5
+# ==================================================================   
+def elastic_transform_label_pair_3d(label1,
+                                    label2, # 3d
+                                    sigma,
+                                    alpha,
+                                    random_state=None):
+
+    if random_state is None:
+        random_state = np.random.RandomState(None)
+
+    shape = (label1.shape[1], label1.shape[2])    
+    
+    dx = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma, mode="constant", cval=0) * alpha
+    dy = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma, mode="constant", cval=0) * alpha
+    
+    x, y = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]))
+    
+    indices = np.reshape(y+dy, (-1, 1)), np.reshape(x+dx, (-1, 1))
+
+    distored_label1 = np.copy(label1)
+    distored_label2 = np.copy(label2)
+    
+    # save deformation field for all slices of the 3d image
+    for zz in range(label1.shape[0]):
+        distored_label1[zz,:,:] = map_coordinates(label1[zz,:,:], indices, order=0, mode='reflect').reshape(shape)
+        distored_label2[zz,:,:] = map_coordinates(label2[zz,:,:], indices, order=0, mode='reflect').reshape(shape)
+    
+    return distored_label1, distored_label2
+
 # ===============================================================
 # ===============================================================
 def make_onehot(arr, nlabels):
